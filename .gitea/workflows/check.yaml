@@ -58,3 +58,23 @@ jobs:
           GAXI_TEST_SERVER: http://gitea:3000
           GAXI_CACHE_HOME: ${{ gitea.workspace }}/.gaxi-cache
         run: uv run pytest tests/gaxi/integration
+
+  nix:
+    name: Nix package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - name: Build the package
+        run: nix build .#gaxi -L
+      - name: Run the built executable
+        run: ./result/bin/gaxi --help
+      # Evaluation only: this proves every flake output still evaluates —
+      # including the devshell, which `nix build` never touches — without
+      # realising the devshell's closure. `dev/` is a separate flake and is
+      # deliberately out of scope, since it needs the private toolbox.
+      - name: Evaluate the flake outputs
+        run: nix flake check --no-build

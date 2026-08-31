@@ -9,6 +9,8 @@ from gaxi import naming
 from gaxi.document import Aggregate, Document, Lines, Mapping, Node, Scalar, Table
 from gaxi.helpdoc import root_help
 
+HOME = "/home/tester"
+
 
 class DocumentTest(unittest.TestCase):
     def test_bare_values_are_wrapped_as_scalars(self) -> None:
@@ -52,14 +54,17 @@ class ExecutableNameTest(unittest.TestCase):
             assert naming.executable() == naming.DEFAULT_NAME
 
     def test_an_installed_name_is_used_as_typed(self) -> None:
-        with unittest.mock.patch.dict("os.environ", {}, clear=True), \
+        with unittest.mock.patch.dict("os.environ", {"HOME": HOME}, clear=True), \
              unittest.mock.patch.object(sys, "argv", ["/usr/bin/gaxi"]):
             assert naming.executable() == "gaxi"
             assert naming.executable_path() == "/usr/bin/gaxi"
 
     def test_a_path_under_the_home_directory_is_abbreviated(self) -> None:
-        target = str(Path.home() / "bin" / "gaxi")
-        with unittest.mock.patch.dict("os.environ", {}, clear=True), \
+        # The home directory is named rather than read: clearing the environment
+        # sends `Path.home()` to the account database, which need not agree with
+        # the ambient HOME (in a Nix build sandbox it does not).
+        target = str(Path(HOME) / "bin" / "gaxi")
+        with unittest.mock.patch.dict("os.environ", {"HOME": HOME}, clear=True), \
              unittest.mock.patch.object(sys, "argv", [target]):
             assert naming.executable_path() == "~/bin/gaxi"
 

@@ -12,3 +12,5 @@ dist/
 .ruff_cache/
 .hypothesis/
 htmlcov/
+/result
+/result-*

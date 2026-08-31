@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+- Released gaxi as a Nix package: `packages/gaxi` builds the console script with
+  `buildPythonApplication` against nixpkgs' Python 3.13 and gates on the offline
+  suites (`tests/gaxi/{unit,properties}`), and the root `package.nix` maps it to
+  `packages.default` so `nix build`, `nix run` and `nix flake check` work from a
+  clean checkout. The runtime closure is the interpreter alone.
+- Declared the project MIT: a `LICENSE` file, a PEP 639 `license`/`license-files`
+  pair in `pyproject.toml` (which raises the build requirement to
+  `setuptools>=77`), and `meta.license` on the Nix package. The wheel now carries
+  `License-Expression: MIT` and ships the license text.
+- Cut the flake down to what gaxi actually needs. `nixpkgs` was following
+  `toolbox`, a private local flake, so nothing outside that machine could build
+  the package and `nix develop` failed outright; the inputs are now `nixpkgs`
+  (pinned to `nixos-26.05`) and `blueprint`, and the lock drops from 21 nodes to
+  3. The devshell is a plain `mkShell` carrying the gaxi toolchain — Python
+  3.13, uv, ruff, nixfmt, Node for pyright, git — in place of the borrowed
+  trading-project shell and its IDE, `jsh`, and `ibkr-gateway` packages.
+- Moved the `jsh` developer shell into its own flake at `dev/`, entered with
+  `nix develop ./dev`. It still builds on the local `toolbox` flake and now
+  carries gaxi's toolchain instead of the trading project's, but because it is a
+  separate flake the root `nix build`, `nix flake check` and `nix flake show`
+  never reach it and stay buildable without toolbox checked out.
+- Made the executable-path tests name their home directory instead of reading
+  it. They cleared the environment and then compared against `Path.home()`,
+  which falls back to the account database once HOME is gone; the two agree on a
+  developer machine but not in a Nix build sandbox, where HOME is
+  `/homeless-shelter`.
+- Added a `Nix package` job to the `check` workflow: it builds `.#gaxi` (whose
+  check phase runs the offline suites), runs the installed console script, and
+  evaluates every flake output with `nix flake check --no-build`.
 - Fixed the built-in `Issue` and `PullRequest` projections: they named `index`,
   the Go struct field, where Gitea's JSON key is `number`. The identifier was
   silently filtered out of every issue and pull-request list default, leaving
