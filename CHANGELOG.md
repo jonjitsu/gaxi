@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fixed the built-in `Issue` and `PullRequest` projections: they named `index`,
+  the Go struct field, where Gitea's JSON key is `number`. The identifier was
+  silently filtered out of every issue and pull-request list default, leaving
+  `{title,state,updated_at}` with nothing to address a detail request with, and
+  `--fields index` failed validation. Default list output for both entities now
+  begins with `number` (ADR 0001, ADR 0007).
 - Renamed the bridge to `gaxi`: the console script, the import package, the
   `GAXI_*` environment variables, and the `.gaxi-cache` directory all change with
   no compatibility alias (ADR 0017).

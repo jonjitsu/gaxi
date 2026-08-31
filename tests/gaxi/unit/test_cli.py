@@ -10,9 +10,9 @@ from tests.gaxi import support
 from tests.gaxi.support import json_response, response, run_cli
 
 PULLS = [
-    {"index": 41, "title": "Fix race", "state": "open",
+    {"number": 41, "title": "Fix race", "state": "open",
      "updated_at": "2026-08-29T18:12:00Z", "body": "b"},
-    {"index": 37, "title": "Update docs", "state": "open",
+    {"number": 37, "title": "Update docs", "state": "open",
      "updated_at": "2026-08-28T09:31:00Z", "body": "b"},
 ]
 
@@ -26,7 +26,7 @@ class CollectionTest(unittest.TestCase):
         assert out.splitlines()[:5] == [
             "count: 2 of 17 total",
             "page: 1",
-            "pull_requests[2]{index,title,state,updated_at}:",
+            "pull_requests[2]{number,title,state,updated_at}:",
             "  41,Fix race,open,2026-08-29T18:12:00Z",
             "  37,Update docs,open,2026-08-28T09:31:00Z",
         ]
@@ -47,10 +47,10 @@ class CollectionTest(unittest.TestCase):
                                responses=[json_response([])])
         assert code == 0
         assert out.splitlines()[0] == "count: 0"
-        assert out.splitlines()[1] == "issues[0]{index,title,state,updated_at}:"
+        assert out.splitlines()[1] == "issues[0]{number,title,state,updated_at}:"
 
     def test_next_page_help_when_a_full_page_returns(self) -> None:
-        rows = [dict(PULLS[0], index=n) for n in range(20)]
+        rows = [dict(PULLS[0], number=n) for n in range(20)]
         _, out, _ = run_cli(["get", "/repos/acme/widgets/pulls", "state=open"],
                             responses=[json_response(rows, headers={"X-Total-Count": "83"})])
         assert "- gaxi get /repos/acme/widgets/pulls state=open page=2 limit=20" in out
@@ -75,9 +75,9 @@ class CollectionTest(unittest.TestCase):
 
 class ProjectionTest(unittest.TestCase):
     def test_fields_replace_the_projection_in_caller_order(self) -> None:
-        _, out, _ = run_cli(["get", "/repos/acme/widgets/pulls", "--fields", "title,index"],
+        _, out, _ = run_cli(["get", "/repos/acme/widgets/pulls", "--fields", "title,number"],
                             responses=[json_response(PULLS)])
-        assert "pull_requests[2]{title,index}:" in out
+        assert "pull_requests[2]{title,number}:" in out
         assert "  Fix race,41" in out
 
     def test_unknown_field_is_a_validation_failure(self) -> None:
@@ -95,8 +95,8 @@ class ProjectionTest(unittest.TestCase):
         assert "  3,alice" in out
 
     def test_absent_optional_field_emits_null(self) -> None:
-        rows = [{"index": 41, "title": "Fix race"}]
-        _, out, _ = run_cli(["get", "/repos/acme/widgets/pulls", "--fields", "index,state"],
+        rows = [{"number": 41, "title": "Fix race"}]
+        _, out, _ = run_cli(["get", "/repos/acme/widgets/pulls", "--fields", "number,state"],
                             responses=[json_response(rows)])
         assert "  41,null" in out
 
@@ -106,19 +106,19 @@ class TruncationTest(unittest.TestCase):
 
     def test_truncation_adds_metadata_and_an_executable_suggestion(self) -> None:
         _, out, _ = run_cli(["get", "/repos/acme/widgets/issues/42",
-                             "--fields", "index,body"],
-                            responses=[json_response({"index": 42, "body": self.LONG})])
+                             "--fields", "number,body"],
+                            responses=[json_response({"number": 42, "body": self.LONG})])
         lines = out.splitlines()
         assert lines[2].endswith('…"')
         assert len(_quoted(lines[2])) == 160
         assert "truncated[1]{field,characters}:" in out
         assert f"  body,{len(self.LONG)}" in out
-        assert "--fields index,body --full" in out
+        assert "--fields number,body --full" in out
 
     def test_full_disables_truncation_without_adding_fields(self) -> None:
         _, out, _ = run_cli(["get", "/repos/acme/widgets/issues/42",
-                             "--fields", "index,body", "--full"],
-                            responses=[json_response({"index": 42, "body": self.LONG,
+                             "--fields", "number,body", "--full"],
+                            responses=[json_response({"number": 42, "body": self.LONG,
                                                       "title": "t"})])
         assert self.LONG in out
         assert "truncated[" not in out
@@ -126,7 +126,7 @@ class TruncationTest(unittest.TestCase):
 
     def test_collection_truncation_identifies_the_row(self) -> None:
         rows = [dict(PULLS[0]), dict(PULLS[1], body=self.LONG)]
-        _, out, _ = run_cli(["get", "/repos/acme/widgets/pulls", "--fields", "index,body"],
+        _, out, _ = run_cli(["get", "/repos/acme/widgets/pulls", "--fields", "number,body"],
                             responses=[json_response(rows)])
         assert "truncated[1]{row,field,characters}:" in out
         assert f"  2,body,{len(self.LONG)}" in out
@@ -161,7 +161,7 @@ class MutationTest(unittest.TestCase):
     def test_known_mutation_executes_without_acknowledgement(self) -> None:
         code, out, session = run_cli(
             ["post", "/repos/acme/widgets/issues", "title=Broken deployment"],
-            responses=[json_response({"index": 42, "title": "Broken deployment",
+            responses=[json_response({"number": 42, "title": "Broken deployment",
                                       "state": "open", "updated_at": "t"}, status=201)])
         assert code == 0
         assert "issue:" in out
@@ -401,7 +401,7 @@ class InputSourceTest(unittest.TestCase):
         try:
             code, _out, session = run_cli(
                 ["post", "/repos/acme/widgets/issues", "--input-json", "@" + path],
-                responses=[json_response({"index": 7, "title": "From a file",
+                responses=[json_response({"number": 7, "title": "From a file",
                                           "state": "open", "updated_at": "t"}, status=201)])
         finally:
             Path(path).unlink()

@@ -9,8 +9,8 @@ BUNDLE_VERSION = "2026.08.30"
 
 # Response-schema fingerprint -> (collection name, detail name, projection)
 ENTITIES = {
-    "Issue": ("issues", "issue", ["index", "title", "state", "updated_at"]),
-    "PullRequest": ("pull_requests", "pull_request", ["index", "title", "state", "updated_at"]),
+    "Issue": ("issues", "issue", ["number", "title", "state", "updated_at"]),
+    "PullRequest": ("pull_requests", "pull_request", ["number", "title", "state", "updated_at"]),
     "Repository": ("repositories", "repository", ["full_name", "private", "fork", "updated_at"]),
     "User": ("users", "user", ["login", "full_name", "is_admin"]),
     "Label": ("labels", "label", ["id", "name", "color"]),

@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 PULL_REQUEST = {
     "type": "object",
     "properties": {
-        "index": {"type": "integer"},
+        "number": {"type": "integer"},
         "title": {"type": "string"},
         "state": {"type": "string"},
         "updated_at": {"type": "string"},
@@ -24,7 +24,7 @@ PULL_REQUEST = {
 ISSUE = {
     "type": "object",
     "properties": {
-        "index": {"type": "integer"},
+        "number": {"type": "integer"},
         "title": {"type": "string"},
         "state": {"type": "string"},
         "updated_at": {"type": "string"},

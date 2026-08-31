@@ -41,7 +41,7 @@ class PolicyTest(unittest.TestCase):
     def test_policy_projection_is_source_faithful(self) -> None:
         props = self.resolve("get:/repos/{owner}/{repo}/pulls")
         assert props.entity == "pull_requests"
-        assert props.projection == ["index", "title", "state", "updated_at"]
+        assert props.projection == ["number", "title", "state", "updated_at"]
 
     def test_fallback_entity_and_projection_for_unknown_schema(self) -> None:
         props = self.resolve("get:/org/{org}/widgets")

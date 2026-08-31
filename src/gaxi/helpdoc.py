@@ -64,7 +64,7 @@ COMMANDS: dict[str, CommandSpec] = {
         "options": REQUEST_OPTIONS,
         "examples": [
             "{exe} get /repos/acme/widgets/pulls state=open limit=20",
-            "{exe} get /repos/acme/widgets/issues/42 --fields index,title,body --full",
+            "{exe} get /repos/acme/widgets/issues/42 --fields number,title,body --full",
         ],
     },
     "post": {

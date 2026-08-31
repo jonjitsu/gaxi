@@ -175,4 +175,4 @@ class DetailFallbackTest(unittest.TestCase):
         )
         assert code == 0
         assert out.startswith("pull_request:")
-        assert "  index: null" in out
+        assert "  number: null" in out
