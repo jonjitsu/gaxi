@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TypedDict
 
-from gaxi import __version__
+import gaxi
 from gaxi.document import Document, Lines, Mapping, Scalar, Table
 from gaxi.naming import executable
 from gaxi.policy_data import BUNDLE_VERSION
@@ -195,7 +195,7 @@ def root_help() -> Document:
     document = Document()
     mapping = Mapping()
     mapping.add("executable", Scalar(executable()))
-    mapping.add("version", Scalar(__version__))
+    mapping.add("version", Scalar(gaxi.__version__))
     mapping.add("summary", Scalar(
         "Turn a Gitea instance's advertised capabilities into compact, safe requests."))
     document.add("gaxi", mapping)
@@ -216,7 +216,7 @@ def version_document() -> Document:
     document = Document()
     mapping = Mapping()
     mapping.add("name", Scalar(executable()))
-    mapping.add("version", Scalar(__version__))
+    mapping.add("version", Scalar(gaxi.__version__))
     mapping.add("policy_bundle", Scalar(BUNDLE_VERSION))
     mapping.add("description_support", Scalar("swagger 2.0"))
     document.add("gaxi", mapping)
