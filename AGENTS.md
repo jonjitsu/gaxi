@@ -15,7 +15,7 @@ Every user-visible command should satisfy these rules unless the command is an e
 7. **Ambient context.** Provide an explicit setup path for opt-in session context (hooks/plugin integration) and an on-demand Agent Skill generated from the same guidance. The session context should be compact, scoped to the current directory/repository, and available before an agent acts.
 8. **Content first.** No-argument entry points show live, actionable state, not usage text. The home view includes the executable path (using `~` for the home-directory prefix), a one-sentence description, and a compact useful data view. Entity nouns should default to their list operation where that is unambiguous.
 9. **Contextual disclosure.** Append `help[N]:` suggestions after successful and relevant empty/error output. Suggestions must be concrete command templates for the next likely steps, carry forward fixed disambiguating flags, and use placeholders such as `<id>` for runtime values—never guessed IDs. Keep the list short (normally 1–3 suggestions).
-10. **Consistent help.** Every subcommand supports a concise `--help` fallback. Help must describe actual flags, defaults, output shape, and examples without dumping large schemas. Generate checked-in CLI documentation with `make docs` when that target exists.
+10. **Consistent help.** Every subcommand supports a concise `--help` fallback. Help must describe actual flags, defaults, output shape, and examples without dumping large schemas. Generate checked-in CLI documentation with `uv run invoke docs`.
 
 ## Output invariants
 
@@ -56,7 +56,7 @@ For every command or output change:
 6. Run the repository quality gates before handoff:
 
    ```bash
-   <project quality commands>
+   uv run invoke verify
    ```
 
 New list commands should use the project’s shared field/flag helpers when those helpers exist, and should share the common structured-output printer.

@@ -1,0 +1,158 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gaxi"
+version = "1.0.0"
+description = "AXI bridge for Gitea-compatible instances"
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+gaxi = "gaxi.cli:main"
+
+[dependency-groups]
+dev = [
+  "python-codeforge @ git+https://github.com/jonjitsu/python-codeforge@1.0.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.python-codeforge]
+packages = ["gaxi"]
+targets = ["src", "tests", "tasks.py"]
+
+[tool.python-codeforge.quality]
+# Radon's maintainability index falls with module length regardless of how clear
+# the module is, so the floor is Radon's own A/B boundary: every module must rank
+# A. The default of 40 would force modules to be split by line count rather than
+# by responsibility.
+mi_floor = 20
+
+[tool.ruff]
+src = ["src", "tests"]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "COM812",  # conflicts with the formatter
+  "ISC001",  # conflicts with the formatter
+  "D203",    # incompatible with D211
+  "D213",    # incompatible with D212
+  "D107",    # __init__ is documented on its class
+  "CPY001",  # no per-file copyright header
+]
+flake8-annotations = { mypy-init-return = true, suppress-none-returning = false }
+
+[tool.ruff.lint.per-file-ignores]
+"tasks.py" = ["T201"]  # print is a task's output channel
+# Test suites assert with `assert`, name their intent instead of documenting it,
+# reach into the internals of the unit under test, and stand in for collaborators
+# with small doubles whose signatures they do not fully use.
+"tests/**" = [
+  "S101",    # assert is the point
+  "PLR2004", # literal expectations are the point
+  "D",       # test names carry the documentation
+  "INP001",  # suites are packages by layout, not by namespace
+  "ANN401",  # `Any` is how a double accepts whatever it is handed
+  "PLR0913", "PLR0917",  # scenario builders take many arguments
+  "FBT001", "FBT003",    # booleans are data in a table-driven assertion
+  "SLF001",  # white-box tests address the unit's own helpers
+  "ARG001", "ARG002", "ARG005",  # doubles match a signature they need not use
+  "EM101", "EM102", "TRY003",    # a double's message is not a product message
+]
+
+[tool.ruff.lint.pylint]
+# Value objects and CLI entry points legitimately carry more than five fields;
+# `max-positional-args` stays at its default so those must be keyword arguments.
+max-args = 8
+
+[tool.ruff.lint.isort]
+known-first-party = ["gaxi"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+python_version = "3.13"
+files = ["src", "tests", "tasks.py"]
+mypy_path = ["src", "."]
+explicit_package_bases = true
+namespace_packages = true
+strict = true
+warn_unreachable = true
+warn_no_return = true
+enable_error_code = [
+  "redundant-expr",
+  "possibly-undefined",
+  "truthy-bool",
+  "ignore-without-code",
+  "unused-awaitable",
+  "explicit-override",
+]
+
+[[tool.mypy.overrides]]
+module = ["invoke.*"]
+ignore_missing_imports = true
+
+[tool.pyright]
+include = ["src", "tests", "tasks.py"]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+reportMissingTypeStubs = "warning"
+# Decoded instance JSON is deliberately `Any` (see gaxi/jsonshape.py), so the
+# Unknown-propagation rules would fire on every field read. Everything else
+# stays strict.
+reportUnknownVariableType = "none"
+reportUnknownMemberType = "none"
+reportUnknownArgumentType = "none"
+# Ruff's SLF001 enforces this, and does so per directory: product code may not
+# reach into another module's privates, while white-box tests may.
+reportPrivateUsage = "none"
+reportUnnecessaryTypeIgnoreComment = "error"
+
+[[tool.pyright.executionEnvironments]]
+root = "."
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = ["--strict-markers", "--strict-config", "-ra"]
+markers = [
+  "slow: long-running tests",
+  "network: requires a reachable instance",
+]
+filterwarnings = ["error"]
+xfail_strict = true
+
+[tool.coverage.run]
+source = ["src/gaxi"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = [
+  # `python -m gaxi` and the module entry points are exercised as installed
+  # console scripts, not from inside the test process.
+  "if __name__ == .__main__.:",
+]
+
+[tool.coverage.json]
+output = ".coverage.json"
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "build", "dist"]
+
+[tool.vulture]
+paths = ["src", "tests", "tasks.py"]
+exclude = [".venv"]
+min_confidence = 80
+sort_by_size = true

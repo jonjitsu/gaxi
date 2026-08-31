@@ -1,0 +1,267 @@
+"""Validated invocation: policy checks, the HTTP exchange, and rendering."""
+
+from __future__ import annotations
+
+import json
+import uuid
+from pathlib import Path
+from typing import TYPE_CHECKING
+from urllib.parse import urlencode, urljoin, urlsplit
+
+from gaxi import projection
+from gaxi.binding import bind
+from gaxi.errors import GaxiError, UsageError
+from gaxi.invocation import Invocation, Outcome
+from gaxi.naming import command
+from gaxi.planner import Planner
+from gaxi.results import dry_run_document, render_response
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping as MappingABC
+    from collections.abc import Sequence
+
+    from gaxi.binding import Binding
+    from gaxi.capability import Capability
+    from gaxi.session import Session
+    from gaxi.transport import Response
+
+MAX_REDIRECTS = 5
+TEXT_LIMIT = projection.LIMIT
+RETRYABLE = (502, 503, 504)
+FIRST_REDIRECT = 300
+FIRST_FAILURE = 400
+
+
+def _as_api_relative(raw_path: str) -> str:
+    """Strip an origin from whatever the caller typed.
+
+    Callers reach for a browser URL or a `host/path` pair; both carry an origin the
+    grammar does not take, so the suggestion drops it rather than prefixing a slash.
+    """
+    split = urlsplit(raw_path)
+    if split.scheme and split.netloc:
+        path, query = split.path or "/", split.query
+    else:
+        path, _, query = raw_path.partition("?")
+        head, slash, rest = path.partition("/")
+        path = "/" + rest if slash and "." in head else "/" + path.lstrip("/")
+    return f"{path}?{query}" if query else path
+
+
+def _suggested_path(session: Session, raw_path: str) -> str:
+    """The runnable path a caller most likely meant.
+
+    A pasted URL carries both the origin and the instance base path, and the grammar
+    takes neither. The base path is only knowable from the instance, so it is removed
+    when the catalog is already reachable and left in place when it is not.
+    """
+    path = _as_api_relative(raw_path)
+    try:
+        base = session.catalog.base_path.rstrip("/")
+    except GaxiError:
+        return path
+    return path[len(base):] if base and path.startswith(base + "/") else path
+
+
+def run_request(
+    session: Session,
+    method: str,
+    raw_path: str,
+    assignments: Sequence[str],
+) -> Outcome:
+    """Resolve, validate, execute, classify, and render one request."""
+    options = session.options
+    path, _, path_query = raw_path.partition("?")
+    if not path.startswith("/"):
+        msg = f"the API-relative path must begin with '/', got {raw_path!r}"
+        raise UsageError(
+            msg,
+            details=[("path", raw_path), ("expected", "a path relative to the instance")],
+            help_commands=[command(method, _suggested_path(session, raw_path))],
+        )
+    catalog = session.catalog
+    cap, _path_values = catalog.resolve(method, path, options.selector)
+    props = session.policy.resolve(cap)
+    binding = bind(cap, assignments, path_query, options.input_json)
+    planner = Planner(catalog, cap, path, binding, options)
+    invocation = Invocation(session, cap, props, binding, planner, method, path)
+
+    _check_execution_policy(invocation)
+    _check_transport_options(invocation)
+
+    if options.dry_run:
+        return Outcome(dry_run_document(invocation))
+
+    response = _exchange(invocation)
+    return render_response(invocation, response)
+
+
+# execution policy ---------------------------------------------------------
+
+def _check_execution_policy(inv: Invocation) -> None:
+    cap, props, options = inv.cap, inv.props, inv.options
+    if props.effect != "mutate":
+        return
+    if props.confirmation == "required" and not options.yes:
+        msg = f"{cap.key} is a destructive mutation and requires --yes"
+        raise GaxiError(
+            msg,
+            details=[("capability", cap.key), ("confirmation", "required")],
+            help_commands=[inv.planner.retry(["--yes"])],
+        )
+    if props.confirmation == "unknown" and not options.allow_unknown:
+        msg = f"{cap.key} has unknown mutation semantics and requires --allow-unknown"
+        raise GaxiError(
+            msg,
+            details=[
+                ("capability", cap.key),
+                ("confirmation", "unknown"),
+                ("policy_source", props.sources.get("confirmation", "fallback")),
+            ],
+            help_commands=[inv.planner.retry(["--allow-unknown"])],
+        )
+
+
+def _check_transport_options(inv: Invocation) -> None:
+    options = inv.options
+    if inv.props.response == "file" and not (options.save or options.raw):
+        msg = f"{inv.cap.key} returns a binary response; use --save <path> or --raw"
+        raise UsageError(
+            msg,
+            details=[("capability", inv.cap.key), ("response", "file")],
+            help_commands=[inv.planner.retry(["--save ./download.bin"])],
+        )
+    if options.save and options.raw:
+        msg = "--save and --raw are mutually exclusive"
+        raise UsageError(msg)
+
+
+# request construction -----------------------------------------------------
+
+def _headers(session: Session, cap: Capability) -> dict[str, str]:
+    headers = {"Accept": "application/json"}
+    if cap.produces:
+        headers["Accept"] = ", ".join(cap.produces)
+    credential = session.credential
+    if credential:
+        headers.update(credential.headers())
+    return headers
+
+
+def _encode_body(binding: Binding) -> tuple[bytes | None, str | None]:
+    if binding.files:
+        return _multipart(binding)
+    if binding.form:
+        return urlencode(binding.form).encode("utf-8"), "application/x-www-form-urlencoded"
+    if binding.body is not None:
+        return json.dumps(binding.body).encode("utf-8"), "application/json"
+    return None, None
+
+
+def _multipart(binding: Binding) -> tuple[bytes, str]:
+    boundary = uuid.uuid4().hex
+    parts = [
+        (
+            f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'
+        ).encode()
+        for name, value in binding.form
+    ]
+    for name, path in binding.files:
+        filename = Path(path).name
+        header = (
+            f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"; '
+            f'filename="{filename}"\r\nContent-Type: application/octet-stream\r\n\r\n'
+        ).encode()
+        parts.append(header + Path(path).read_bytes() + b"\r\n")
+    parts.append(f"--{boundary}--\r\n".encode())
+    return b"".join(parts), f"multipart/form-data; boundary={boundary}"
+
+
+def _exchange(inv: Invocation) -> Response:
+    session = inv.session
+    url = session.instance.url(inv.path, inv.binding.query_string())
+    headers = _headers(session, inv.cap)
+    body, content_type = _encode_body(inv.binding)
+    if content_type:
+        headers["Content-Type"] = content_type
+    stream = bool(session.options.save)
+    response = _send_once(inv, url, headers, body, stream=stream)
+    return _follow_redirects(inv, response, headers, stream=stream)
+
+
+def _send_once(
+    inv: Invocation,
+    url: str,
+    headers: MappingABC[str, str],
+    body: bytes | None,
+    *,
+    stream: bool,
+) -> Response:
+    """Automatic retry is permitted only for `retry: safe`."""
+    session, method, props = inv.session, inv.method, inv.props
+    try:
+        response = session.send(method, url, headers=headers, body=body, stream=stream)
+    except GaxiError:
+        if props.retry != "safe":
+            raise
+        session.debug("retrying a safe request after a transport failure")
+        return session.send(method, url, headers=headers, body=body, stream=stream)
+    if response.status in RETRYABLE and props.retry == "safe":
+        session.debug(f"retrying a safe request after status {response.status}")
+        return session.send(method, url, headers=headers, body=body, stream=stream)
+    return response
+
+
+def _follow_redirects(
+    inv: Invocation,
+    response: Response,
+    headers: MappingABC[str, str],
+    *,
+    stream: bool,
+) -> Response:
+    session = inv.session
+    hops = 0
+    while (target := _redirect_target(response)) is not None:
+        _check_redirect_allowed(inv, response, target)
+        hops += 1
+        if hops > MAX_REDIRECTS:
+            msg = f"redirect limit of {MAX_REDIRECTS} exceeded"
+            raise GaxiError(msg, status=response.status, details=[("location", target)])
+        forwarded = _forwarded_headers(headers, target, session.instance.origin)
+        response = session.send("GET", target, headers=forwarded, stream=stream)
+    return response
+
+
+def _redirect_target(response: Response) -> str | None:
+    """Where a redirect points, or None when the response is not a redirect."""
+    if not FIRST_REDIRECT <= response.status < FIRST_FAILURE:
+        return None
+    location = response.headers.get("Location")
+    if not location:
+        return None
+    return urljoin(response.url, location)
+
+
+def _check_redirect_allowed(inv: Invocation, response: Response, target: str) -> None:
+    """A mutation is never redirected, and only GET is ever followed."""
+    if inv.props.effect != "mutate":
+        return
+    msg = "refusing to follow a redirect for a mutation"
+    raise GaxiError(
+        msg,
+        status=response.status,
+        request=f"{inv.method.upper()} {response.url}",
+        details=[("location", target)],
+    )
+
+
+def _forwarded_headers(
+    headers: MappingABC[str, str],
+    target: str,
+    origin: str,
+) -> dict[str, str]:
+    """The request headers to carry forward, dropping the credential off-origin."""
+    forwarded = dict(headers)
+    if not target.startswith(origin):
+        forwarded.pop("Authorization", None)
+    return forwarded

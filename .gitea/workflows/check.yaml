@@ -1,0 +1,49 @@
+name: check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Sync the development environment
+        run: uv sync --all-groups
+      - name: Quality gates
+        run: uv run invoke verify
+
+  live-compatibility:
+    runs-on: ubuntu-latest
+    services:
+      gitea:
+        image: gitea/gitea:latest
+        ports:
+          - 3000:3000
+        env:
+          GITEA__security__INSTALL_LOCK: "true"
+          GITEA__server__ROOT_URL: http://localhost:3000/
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Sync the development environment
+        run: uv sync --all-groups
+      - name: Wait for the ephemeral instance
+        run: |
+          for _ in $(seq 1 60); do
+            curl -sf http://localhost:3000/api/v1/version && exit 0
+            sleep 2
+          done
+          echo "instance did not start" >&2
+          exit 1
+      - name: Compile the live catalog
+        env:
+          GAXI_TEST_SERVER: http://localhost:3000
+          GAXI_CACHE_HOME: ${{ github.workspace }}/.gaxi-cache
+        run: uv run pytest tests/gaxi/integration
