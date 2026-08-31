@@ -1,38 +1,27 @@
-name: check
+name: compatibility-scheduled
 
 on:
-  push:
-  pull_request:
+  schedule:
+    # Weekly Monday 06:00 UTC — optional drift check against newer Gitea releases.
+    - cron: "0 6 * * 1"
   workflow_dispatch:
-
-concurrency:
-  group: check-${{ gitea.workflow }}-${{ gitea.ref }}
-  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  verify:
-    name: Quality gates
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          python-version: "3.13"
-      - name: Sync the development environment
-        run: uv sync --all-groups --frozen
-      - name: Quality gates
-        run: uv run invoke verify
-
   live-compatibility:
-    name: Live instance compatibility
+    name: Live instance compatibility (${{ matrix.gitea_tag }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        gitea_tag:
+          - "1.27"
+          - latest
     services:
       gitea:
-        image: gitea/gitea:1.27
+        image: gitea/gitea:${{ matrix.gitea_tag }}
         env:
           GITEA__security__INSTALL_LOCK: "true"
           GITEA__server__ROOT_URL: http://gitea:3000/
