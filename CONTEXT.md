@@ -2,6 +2,10 @@
 
 This context describes the language used to turn a Gitea instance's advertised API capabilities into safe, compact interactions for software agents.
 
+For a visual guide to the system boundary, module ownership, request lifecycle,
+credential safety, and result shaping, see the
+[architecture map](docs/architecture.md).
+
 ## Language
 
 **AXI bridge**:
