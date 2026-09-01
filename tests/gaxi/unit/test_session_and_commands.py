@@ -16,9 +16,10 @@ from gaxi import session as session_module
 from gaxi.catalog import Catalog
 from gaxi.config import Config
 from gaxi.errors import EXIT_USAGE, GaxiError
+from gaxi.options import DiscoveryOptions, Options
 from gaxi.projection import cell_value, resolve_path, validate_fields
 from gaxi.repo_context import RepositoryContext, parse_remote
-from gaxi.session import Options, Session
+from gaxi.session import Session
 from gaxi.transport import RecordingTransport, Response
 from tests.gaxi import support
 from tests.gaxi.fixtures import DOCUMENT
@@ -49,8 +50,10 @@ class SessionTest(unittest.TestCase):
         assert load.call_count == 1
 
     def test_debug_writes_to_stderr_and_redacts(self) -> None:
-        session = support.make_session(env={"GITEA_TOKEN": "secret"})
-        session.options.debug = True
+        session = support.make_session(
+            env={"GITEA_TOKEN": "secret"},
+            options=Options(discovery=DiscoveryOptions(debug=True)),
+        )
         stream = io.StringIO()
         original, sys.stderr = sys.stderr, stream
         try:
@@ -71,8 +74,10 @@ class SessionTest(unittest.TestCase):
         assert stream.getvalue() == ""
 
     def test_debug_logging_names_the_request(self) -> None:
-        session = support.make_session(responses=[json_response({})])
-        session.options.debug = True
+        session = support.make_session(
+            responses=[json_response({})],
+            options=Options(discovery=DiscoveryOptions(debug=True)),
+        )
         stream = io.StringIO()
         original, sys.stderr = sys.stderr, stream
         try:
@@ -93,7 +98,7 @@ class SessionTest(unittest.TestCase):
             json.dumps(DOCUMENT).encode("utf-8"),
         )
         session = Session(
-            Options(debug=True, refresh=True),
+            Options(discovery=DiscoveryOptions(debug=True, refresh=True)),
             transport=RecordingTransport([page, document]),
             env={"GITEA_SERVER": support.ORIGIN},
             config=Config({}),

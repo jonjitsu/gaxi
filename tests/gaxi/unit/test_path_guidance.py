@@ -8,7 +8,8 @@ import pytest
 from gaxi.catalog import Catalog
 from gaxi.errors import EXIT_FAILURE, EXIT_USAGE, GaxiError
 from gaxi.invoke import _as_api_relative, _suggested_path
-from gaxi.session import Options, Session
+from gaxi.options import DiscoveryOptions, Options
+from gaxi.session import Session
 from gaxi.transport import RecordingTransport
 from tests.gaxi import support
 from tests.gaxi.fixtures import DOCUMENT
@@ -56,7 +57,10 @@ class UrlInsteadOfPathTest(unittest.TestCase):
         assert "/https:" not in out
 
     def test_the_base_path_stays_when_the_instance_cannot_be_reached(self) -> None:
-        session = Session(Options(server=support.ORIGIN), transport=RecordingTransport())
+        session = Session(
+            Options(discovery=DiscoveryOptions(server=support.ORIGIN)),
+            transport=RecordingTransport(),
+        )
         with unittest.mock.patch(
             "gaxi.session.load_catalog",
             side_effect=GaxiError("cannot reach instance"),

@@ -14,9 +14,10 @@ if TYPE_CHECKING:
     from gaxi.capability import Capability
     from gaxi.classify import Classification
     from gaxi.document import Document
+    from gaxi.options import RequestOptions
     from gaxi.planner import Planner
     from gaxi.policy import Properties
-    from gaxi.session import Options, Session
+    from gaxi.session import Session
     from gaxi.transport import Response
 
 
@@ -47,9 +48,9 @@ class Invocation:
     path: str
 
     @property
-    def options(self) -> Options:
-        """The options this invocation was given."""
-        return self.session.options
+    def request(self) -> RequestOptions:
+        """The request options this invocation was given."""
+        return self.session.options.request
 
     @property
     def request_line(self) -> str:

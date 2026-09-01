@@ -45,7 +45,7 @@ def run(session: Session, positionals: Sequence[str]) -> Document:
 
 
 def _resolve(session: Session, root: Path, default: str) -> Path:
-    return (root / (session.options.save or default)).absolute()
+    return (root / (session.options.setup.path or default)).absolute()
 
 
 def _write_skill(session: Session, root: Path) -> Document:

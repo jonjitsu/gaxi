@@ -89,7 +89,7 @@ def _list(session: Session) -> Document:
 
 
 def _helper_for(session: Session, origin: str) -> list[str]:
-    option = session.options.helper
+    option = session.options.auth.helper
     if option:
         return option.split()
     helper = session.config.credential_helper(origin)
@@ -107,7 +107,7 @@ def _helper_for(session: Session, origin: str) -> list[str]:
 
 
 def _add(session: Session, origin: str) -> Document:
-    if not session.options.token_stdin:
+    if not session.options.auth.token_stdin:
         msg = "auth add reads the token from stdin; pass --token-stdin"
         raise UsageError(
             msg,

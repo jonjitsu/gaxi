@@ -75,11 +75,12 @@ def run_request(
     _check_execution_policy(invocation)
     _check_transport_options(invocation)
 
-    if session.options.dry_run:
+    request = session.options.request
+    if request.dry_run:
         return Outcome(dry_run_document(invocation))
 
     response = _exchange(invocation)
-    if session.options.save and FIRST_SUCCESS <= response.status < FIRST_REDIRECT:
+    if request.save and FIRST_SUCCESS <= response.status < FIRST_REDIRECT:
         return _save_outcome(invocation, response)
     return _render_exchanged(invocation, response)
 
@@ -113,7 +114,7 @@ def _resolve_invocation(
     *,
     apply_pagination: bool = True,
 ) -> Invocation:
-    options = session.options
+    request = session.options.request
     method = method.lower()
     path, _, path_query = raw_path.partition("?")
     if not path.startswith("/"):
@@ -124,16 +125,16 @@ def _resolve_invocation(
             help_commands=build(command(method, _suggested_path(session, raw_path))),
         )
     catalog = session.catalog
-    cap, _path_values = catalog.resolve(method, path, options.selector)
+    cap, _path_values = catalog.resolve(method, path, request.selector)
     props = session.policy.resolve(cap)
     binding = bind(
         cap,
         assignments,
         path_query,
-        options.input_json,
+        request.input_json,
         apply_pagination=apply_pagination,
     )
-    planner = Planner(catalog, cap, path, binding, options, session)
+    planner = Planner(catalog, cap, path, binding, session)
     return Invocation(session, cap, props, binding, planner, method, path)
 
 
@@ -153,9 +154,10 @@ def _classify_response(invocation: Invocation, response: Response) -> Fetched:
 
 
 def _save_outcome(invocation: Invocation, response: Response) -> Outcome:
-    path = invocation.options.save or ""
+    request = invocation.request
+    path = request.save or ""
     try:
-        receipt = save(response, path, overwrite=invocation.options.overwrite)
+        receipt = save(response, path, overwrite=invocation.session.options.overwrite)
     except GaxiError as exc:
         if any(name == "reason" and value == "exists" for name, value in exc.details):
             exc.help_commands = build(
@@ -184,17 +186,17 @@ def _page(binding: Binding) -> int | None:
 
 
 def _check_execution_policy(inv: Invocation) -> None:
-    cap, props, options = inv.cap, inv.props, inv.options
+    cap, props, request = inv.cap, inv.props, inv.request
     if props.effect != "mutate":
         return
-    if props.confirmation == "required" and not options.yes:
+    if props.confirmation == "required" and not request.yes:
         msg = f"{cap.key} is a destructive mutation and requires --yes"
         raise GaxiError(
             msg,
             details=[("capability", cap.key), ("confirmation", "required")],
             help_commands=build(inv.planner.retry(["--yes"])),
         )
-    if props.confirmation == "unknown" and not options.allow_unknown:
+    if props.confirmation == "unknown" and not request.allow_unknown:
         msg = f"{cap.key} has unknown mutation semantics and requires --allow-unknown"
         raise GaxiError(
             msg,
@@ -208,15 +210,15 @@ def _check_execution_policy(inv: Invocation) -> None:
 
 
 def _check_transport_options(inv: Invocation) -> None:
-    options = inv.options
-    if inv.props.response == "file" and not (options.save or options.raw):
+    request = inv.request
+    if inv.props.response == "file" and not (request.save or request.raw):
         msg = f"{inv.cap.key} returns a binary response; use --save <path> or --raw"
         raise UsageError(
             msg,
             details=[("capability", inv.cap.key), ("response", "file")],
             help_commands=build(inv.planner.retry(["--save ./download.bin"])),
         )
-    if options.save and options.raw:
+    if request.save and request.raw:
         msg = "--save and --raw are mutually exclusive"
         raise UsageError(msg)
 
@@ -270,7 +272,7 @@ def _exchange(inv: Invocation) -> Response:
     body, content_type = _encode_body(inv.binding)
     if content_type:
         headers["Content-Type"] = content_type
-    stream = bool(session.options.save)
+    stream = bool(inv.request.save)
     response = _send_once(inv, url, headers, body, stream=stream)
     return _follow_redirects(inv, response, headers, stream=stream)
 

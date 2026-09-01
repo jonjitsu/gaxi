@@ -11,9 +11,9 @@ from gaxi.catalog import Catalog
 from gaxi.document import Document, Mapping, Scalar, Table
 from gaxi.encode import to_toon
 from gaxi.errors import EXIT_USAGE
+from gaxi.options import Options, RequestOptions
 from gaxi.render import redirect
 from gaxi.repo_context import RepositoryContext
-from gaxi.session import Options
 from tests.gaxi import support
 from tests.gaxi.fixtures import DOCUMENT
 from tests.gaxi.support import json_response, response, run_cli
@@ -101,7 +101,7 @@ class DryRunTest(unittest.TestCase):
         code, out, _ = run_cli(
             ["get", "/repos/acme/widgets/pulls", "--dry-run"],
             repo=RepositoryContext(),
-            options=Options(dry_run=True),
+            options=Options(request=RequestOptions(dry_run=True)),
         )
         assert code == 0
         assert "  repository:" not in out

@@ -37,7 +37,7 @@ def render_classification(
     response: Response,
 ) -> Outcome:
     """Shape one classified response into the result the caller receives."""
-    options = inv.options
+    request = inv.request
     if classification.kind == "error":
         details: list[tuple[str, JsonValue]] = []
         if classification.status == FORBIDDEN:
@@ -54,7 +54,7 @@ def render_classification(
             ),
             exit_code=EXIT_FAILURE,
         )
-    if options.raw:
+    if request.raw:
         return Outcome(raw=response.read_all())
     return Outcome(_document_for(inv, classification))
 
@@ -108,10 +108,10 @@ def _error_message(classification: Classification) -> str:
 
 
 def _collection_document(inv: Invocation, classification: Classification) -> Document:
-    options = inv.options
+    request = inv.request
     items = classification.payload or []
-    fields = resolve_fields(inv.cap, inv.props, items, options.fields)
-    rows, truncations = projection.project_rows(items, fields, full=options.full)
+    fields = resolve_fields(inv.cap, inv.props, items, request.fields)
+    rows, truncations = projection.project_rows(items, fields, full=request.full)
     if not items:
         return render.collection(
             inv.props.entity or "results",
@@ -124,7 +124,7 @@ def _collection_document(inv: Invocation, classification: Classification) -> Doc
     help_commands = inv.planner.for_collection(
         classification,
         fields,
-        allow_policy_fallback=not inv.options.fields,
+        allow_policy_fallback=not inv.request.fields,
     )
     if truncations:
         help_commands = prepend(inv.planner.fields_full(fields), *help_commands)
@@ -141,11 +141,11 @@ def _collection_document(inv: Invocation, classification: Classification) -> Doc
 
 
 def _detail_document(inv: Invocation, classification: Classification) -> Document:
-    options = inv.options
+    request = inv.request
     value = classification.payload
     items = [value] if isinstance(value, dict) else []
-    fields = resolve_fields(inv.cap, inv.props, items, options.fields)
-    pairs, truncations = projection.project_object(value, fields, full=options.full)
+    fields = resolve_fields(inv.cap, inv.props, items, request.fields)
+    pairs, truncations = projection.project_object(value, fields, full=request.full)
     help_commands = inv.planner.for_detail(classification, effect=inv.props.effect)
     if truncations:
         help_commands = prepend(inv.planner.fields_full(fields), *help_commands)
@@ -159,7 +159,7 @@ def _detail_document(inv: Invocation, classification: Classification) -> Documen
 
 def _text_document(inv: Invocation, classification: Classification) -> Document:
     text = classification.payload or ""
-    shortened, original = projection.truncate(text, full=inv.options.full)
+    shortened, original = projection.truncate(text, full=inv.request.full)
     help_commands = build(
         inv.planner.retry(["--raw"]) if original is not None else None,
     )

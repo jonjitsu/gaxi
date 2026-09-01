@@ -28,8 +28,9 @@ def run(session: Session, terms: Sequence[str]) -> Document:
     catalog = session.catalog
     policy = session.policy
     matched = catalog.search(terms)
-    limit = session.options.limit or DEFAULT_LIMIT
-    page = session.options.page or 1
+    discovery = session.options.discovery
+    limit = discovery.limit or DEFAULT_LIMIT
+    page = discovery.page or 1
     start = (page - 1) * limit
     window = matched[start:start + limit]
 

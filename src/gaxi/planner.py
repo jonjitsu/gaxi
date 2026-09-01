@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from gaxi.classify import Classification
     from gaxi.credentials import Credential
     from gaxi.jsonshape import JsonValue
-    from gaxi.session import Options, Session
+    from gaxi.session import Session
 
 PAGINATION = ("page", "limit")
 MIN_DETAIL_SEGMENTS = 2
@@ -53,14 +53,12 @@ class Planner:
         cap: Capability,
         path: str,
         binding: Binding,
-        options: Options,
         session: Session | None = None,
     ) -> None:
         self.catalog = catalog
         self.cap = cap
         self.path = path
         self.binding = binding
-        self.options = options
         self.session = session
 
     # command reconstruction ------------------------------------------------

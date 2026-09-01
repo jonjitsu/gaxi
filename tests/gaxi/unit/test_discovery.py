@@ -41,14 +41,18 @@ class OriginTest(unittest.TestCase):
         remote = parse_remote("origin", "git@gitea.home.arpa:acme/widgets.git")
         assert (remote.scheme, remote.host, remote.full_name) == (
             "ssh", "gitea.home.arpa", "acme/widgets")
-        origin, _ = resolve_origin(Config({}), RepositoryContext("/repo", "master", [remote]))
+        origin, _ = resolve_origin(
+            Config({}), RepositoryContext("/repo", "master", [remote]), env={},
+        )
         assert origin == "https://gitea.home.arpa"
 
     def test_saved_mapping_supplies_a_custom_port(self) -> None:
         config = Config({"servers": {"https://gitea.home.arpa:8443/gitea": {
             "ssh_hosts": ["gitea.home.arpa"]}}})
         remote = parse_remote("origin", "git@gitea.home.arpa:acme/widgets.git")
-        origin, source = resolve_origin(config, RepositoryContext("/repo", "master", [remote]))
+        origin, source = resolve_origin(
+            config, RepositoryContext("/repo", "master", [remote]), env={},
+        )
         assert origin == "https://gitea.home.arpa:8443/gitea"
         assert source == "repository remote origin"
 

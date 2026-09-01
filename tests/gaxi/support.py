@@ -12,8 +12,9 @@ from gaxi import cli
 from gaxi.catalog import Catalog
 from gaxi.config import Config
 from gaxi.discovery import Instance
+from gaxi.options import Options
 from gaxi.repo_context import RepositoryContext, parse_remote
-from gaxi.session import Options, Session
+from gaxi.session import Session
 from gaxi.transport import RecordingTransport, Response
 from tests.gaxi.fixtures import DOCUMENT
 
@@ -86,7 +87,8 @@ def run_cli(
     **kwargs: Any,
 ) -> tuple[int, str, Session]:
     """Run the CLI and capture stdout; returns `(exit_code, text, session)`."""
-    session = session or make_session(**kwargs)
+    base = session or make_session(**kwargs)
     stream = io.StringIO()
-    code = cli.main(argv, session=session, stdout=stream)
-    return code, stream.getvalue(), session
+    active: list[Session] = []
+    code = cli.main(argv, session=base, stdout=stream, session_out=active)
+    return code, stream.getvalue(), active[0] if active else base

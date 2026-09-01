@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import os
 import sys
-from pathlib import Path
 from typing import IO, TYPE_CHECKING
 
 from gaxi import helpdoc, render
@@ -26,7 +25,8 @@ from gaxi.errors import EXIT_FAILURE, GaxiError, UsageError
 from gaxi.invocation import Outcome
 from gaxi.invoke import run_request
 from gaxi.naming import executable
-from gaxi.session import Options, Session
+from gaxi.options import Options, build_options
+from gaxi.session import Session
 from gaxi.suggestions import build, configure, root_help, subcommand_help
 
 if TYPE_CHECKING:
@@ -42,7 +42,7 @@ VALUE_OPTIONS = {
     "--output": "output",
     "--fields": "fields",
     "--save": "save",
-    "--path": "save",
+    "--path": "path",
     "--as": "selector",
     "--operation": "selector",
     "--input-json": "input_json",
@@ -64,7 +64,6 @@ FLAG_OPTIONS = {
     "--token-stdin": "token_stdin",
     "--no-help": "no_help",
 }
-OUTPUT_FORMATS = ("toon", "json", "yaml")
 
 
 class Invocation:
@@ -148,51 +147,8 @@ def _consume_option(argument: str, argv: Sequence[str], index: int, values: Json
     return index + 1
 
 
-INTEGER_OPTIONS = ("timeout", "limit", "page")
-
-
 def _options(values: JsonObject) -> Options:
-    if "fields" in values:
-        values["fields"] = [f.strip() for f in values["fields"].split(",") if f.strip()]
-    for key in INTEGER_OPTIONS:
-        if key in values:
-            values[key] = _positive_int(values[key], f"--{key}")
-    if "input_json" in values:
-        values["input_json"] = _read_input_json(values["input_json"])
-    _check_output_format(values.get("output", "toon"))
-    return Options(**values)
-
-
-def _check_output_format(output: str) -> None:
-    if output in OUTPUT_FORMATS:
-        return
-    msg = f"unknown output format {output}"
-    raise UsageError(msg, details=[("supported", ", ".join(OUTPUT_FORMATS))])
-
-
-def _positive_int(value: str, name: str) -> int:
-    try:
-        number = int(value)
-    except (TypeError, ValueError) as exc:
-        msg = f"{name} expects an integer, got {value!r}"
-        raise UsageError(msg) from exc
-    if number <= 0:
-        msg = f"{name} expects a positive integer, got {value!r}"
-        raise UsageError(msg)
-    return number
-
-
-def _read_input_json(value: str) -> str:
-    if value == "-":
-        return sys.stdin.read()
-    if value.startswith("@"):
-        path = value[1:]
-        try:
-            return Path(path).read_text(encoding="utf-8")
-        except OSError as exc:
-            msg = f"cannot read --input-json file: {exc}"
-            raise UsageError(msg, details=[("path", path)]) from exc
-    return value
+    return build_options(values)
 
 
 def _run_verb(invocation: Invocation, session: Session, name: str) -> Outcome:
@@ -297,10 +253,19 @@ def _write_outcome(
     return outcome.exit_code
 
 
+def _session_from_invocation(session: Session | None, options: Options) -> Session:
+    """Build a session for one invocation without mutating a prior session."""
+    if session is None:
+        return Session(options)
+    return session.with_options(options)
+
+
 def main(
     argv: Sequence[str] | None = None,
     session: Session | None = None,
     stdout: IO[str] | None = None,
+    *,
+    session_out: list[Session] | None = None,
 ) -> int:
     """Entry point. Structured output always leaves on stdout."""
     argv = list(sys.argv[1:] if argv is None else argv)
@@ -311,8 +276,9 @@ def main(
     options = Options()
     try:
         invocation = parse(argv)
-        session = session or Session(invocation.options)
-        session.options = invocation.options
+        session = _session_from_invocation(session, invocation.options)
+        if session_out is not None:
+            session_out[:] = [session]
         options = invocation.options
         env = session.env
         _configure_help_suppression(argv, options, env)
@@ -343,7 +309,7 @@ def _write_document(
     options: Options,
     secrets: Sequence[str],
 ) -> None:
-    stream.write(redact(encode(document, options.output), secrets) + "\n")
+    stream.write(redact(encode(document, options.output.format), secrets) + "\n")
 
 
 def _write_raw(stream: IO[str], payload: bytes) -> None:

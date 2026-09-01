@@ -7,7 +7,7 @@ from pathlib import Path
 
 from gaxi import invoke
 from gaxi.invocation import Fetched
-from gaxi.session import Options
+from gaxi.options import Options, RequestOptions
 from tests.gaxi import support
 from tests.gaxi.support import json_response, response, run_cli
 
@@ -33,7 +33,7 @@ class RunRequestTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = str(Path(directory) / "archive.zip")
             session = support.make_session(
-                options=Options(save=path),
+                options=Options(request=RequestOptions(save=path)),
                 responses=[response(404, b"not found", media_type="application/json")],
             )
             outcome = invoke.run_request(

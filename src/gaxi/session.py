@@ -10,6 +10,7 @@ from gaxi import repo_context
 from gaxi.config import Config, load_repo_overlay
 from gaxi.credentials import CredentialResolver, redact
 from gaxi.discovery import Instance, load_catalog, resolve_origin
+from gaxi.options import Options
 from gaxi.policy import Policy
 from gaxi.transport import Transport
 
@@ -20,36 +21,6 @@ if TYPE_CHECKING:
     from gaxi.credentials import Credential
     from gaxi.repo_context import RepositoryContext
     from gaxi.transport import Exchange, Response
-
-DEFAULT_TIMEOUT = 30
-
-
-class Options:
-    """Bridge options. Every option begins with `--`; API inputs never do."""
-
-    def __init__(self, **values: object) -> None:
-        self.server: str | None = None
-        self.output: str = "toon"
-        self.fields: list[str] | None = None
-        self.full: bool = False
-        self.raw: bool = False
-        self.save: str | None = None
-        self.overwrite: bool = False
-        self.yes: bool = False
-        self.allow_unknown: bool = False
-        self.dry_run: bool = False
-        self.anonymous: bool = False
-        self.selector: str | None = None
-        self.input_json: str | None = None
-        self.refresh: bool = False
-        self.debug: bool = False
-        self.timeout: int = DEFAULT_TIMEOUT
-        self.limit: int | None = None
-        self.page: int | None = None
-        self.helper: str | None = None
-        self.token_stdin: bool = False
-        self.no_help: bool = False
-        self.__dict__.update(values)
 
 
 class Session:
@@ -69,7 +40,9 @@ class Session:
         self.options = options or Options()
         self.env = dict(env if env is not None else os.environ)
         self.cwd = cwd
-        self.transport: Exchange = transport or Transport(timeout=self.options.timeout)
+        self.transport: Exchange = transport or Transport(
+            timeout=self.options.discovery.timeout,
+        )
         self.requests = 0
         self._config = config
         self._repository = repository
@@ -77,6 +50,20 @@ class Session:
         self._policy: Policy | None = None
         self._credential: Credential | None = None
         self._credential_resolved = False
+
+    def with_options(self, options: Options) -> Session:
+        """Return a new session that shares injected state but uses other options."""
+        replacement = Session(
+            options,
+            transport=self.transport,
+            env=self.env,
+            cwd=self.cwd,
+            config=self._config,
+            repository=self._repository,
+            instance=self._instance,
+        )
+        replacement.requests = self.requests
+        return replacement
 
     @property
     def config(self) -> Config:
@@ -96,14 +83,15 @@ class Session:
     def instance(self) -> Instance:
         """The resolved instance and its catalog, discovered once."""
         if self._instance is None:
+            discovery = self.options.discovery
             origin, source = resolve_origin(
-                self.config, self.repository, self.options.server, self.env,
+                self.config, self.repository, discovery.server, self.env,
             )
             catalog, requests = load_catalog(
                 origin,
                 self.transport,
-                refresh=self.options.refresh,
-                log_request=self._log_discovery_request if self.options.debug else None,
+                refresh=discovery.refresh,
+                log_request=self._log_discovery_request if discovery.debug else None,
             )
             self.requests += requests
             self._instance = Instance(origin, source, catalog, requests)
@@ -130,7 +118,7 @@ class Session:
         if not self._credential_resolved:
             resolver = CredentialResolver(self.config, self.env)
             self._credential = resolver.resolve(
-                self.instance.origin, anonymous=self.options.anonymous,
+                self.instance.origin, anonymous=self.options.discovery.anonymous,
             )
             resolver.check_transport(self.instance.origin, self._credential)
             self._credential_resolved = True
@@ -155,13 +143,13 @@ class Session:
     ) -> Response:
         """Perform one request, counting it against this session."""
         self.requests += 1
-        if self.options.debug:
+        if self.options.discovery.debug:
             self.debug(f"{method.upper()} {url}")
         return self.transport.send(method, url, headers=headers, body=body, stream=stream)
 
     def debug(self, message: str) -> None:
         """Incidental diagnostics belong on stderr, never in the result."""
-        if not self.options.debug:
+        if not self.options.discovery.debug:
             return
         sys.stderr.write("gaxi: " + redact(message, self.secrets) + "\n")
 

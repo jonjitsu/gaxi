@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bridge options are now a frozen record grouped by consumer seam (`request`,
+  `discovery`, `setup`, `output`, `auth`). Coercion and validation live in
+  `gaxi.options.build_options` instead of `cli._options`. `--path` maps to
+  `setup.path` and no longer aliases `--save`; `cli.main` constructs a new
+  session per invocation instead of mutating `session.options` mid-run.
 - Add ``--no-help`` and ``GAXI_NO_HELP`` to omit ``help[]`` suggestions from
   structured output without changing any other part of the result shape.
   ``--help`` documents remain ungated because they are an explicit request for

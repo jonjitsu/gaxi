@@ -2,7 +2,7 @@
 
 import unittest
 
-from gaxi.session import Options
+from gaxi.options import DiscoveryOptions, Options
 from tests.gaxi import support
 from tests.gaxi.support import json_response, response, run_cli
 
@@ -73,7 +73,7 @@ class IdentityTest(unittest.TestCase):
 class OpenTotalTest(unittest.TestCase):
     def test_open_issues_request_includes_type_qualifier(self) -> None:
         session = support.make_session(
-            options=Options(anonymous=True),
+            options=Options(discovery=DiscoveryOptions(anonymous=True)),
             responses=[
                 json_response([], headers={"X-Total-Count": "13"}),
                 json_response([], headers={"X-Total-Count": "2"}),
@@ -91,7 +91,7 @@ class OpenTotalTest(unittest.TestCase):
     def test_a_missing_total_falls_back_to_the_returned_length(self) -> None:
         code, out, _ = run_cli(
             [],
-            options=Options(anonymous=True),
+            options=Options(discovery=DiscoveryOptions(anonymous=True)),
             responses=[json_response([{"index": 1}]), json_response([])],
         )
         assert code == 0
@@ -101,7 +101,7 @@ class OpenTotalTest(unittest.TestCase):
     def test_an_unparsable_total_is_named_unknown(self) -> None:
         code, out, _ = run_cli(
             [],
-            options=Options(anonymous=True),
+            options=Options(discovery=DiscoveryOptions(anonymous=True)),
             responses=[
                 json_response([], headers={"X-Total-Count": "many"}),
                 response(200, b"<html>", media_type="text/html"),
@@ -113,7 +113,7 @@ class OpenTotalTest(unittest.TestCase):
     def test_a_failed_aggregate_is_named_unknown(self) -> None:
         code, out, _ = run_cli(
             [],
-            options=Options(anonymous=True),
+            options=Options(discovery=DiscoveryOptions(anonymous=True)),
             responses=[json_response({"message": "no"}, status=500)],
         )
         assert code == 0

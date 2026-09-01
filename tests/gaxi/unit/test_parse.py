@@ -30,7 +30,7 @@ class ParseTest(unittest.TestCase):
     def test_inline_and_separate_option_values_agree(self) -> None:
         inline = cli.parse(["get", "/x", "--output=json"]).options
         separate = cli.parse(["get", "/x", "--output", "json"]).options
-        assert inline.output == separate.output == "json"
+        assert inline.output.format == separate.output.format == "json"
 
     def test_a_flag_rejects_a_value(self) -> None:
         with pytest.raises(UsageError) as caught:
@@ -54,10 +54,10 @@ class ParseTest(unittest.TestCase):
         assert cli.parse(["get", "/x", "-1"]).positionals == ["/x", "-1"]
 
     def test_fields_are_split_and_stripped(self) -> None:
-        assert cli.parse(["--fields", "a, b ,,c"]).options.fields == ["a", "b", "c"]
+        assert cli.parse(["--fields", "a, b ,,c"]).options.request.fields == ("a", "b", "c")
 
     def test_integer_options_must_be_positive_integers(self) -> None:
-        assert cli.parse(["--timeout", "5"]).options.timeout == 5
+        assert cli.parse(["--timeout", "5"]).options.discovery.timeout == 5
         with pytest.raises(UsageError) as caught:
             cli.parse(["--limit", "abc"])
         assert "expects an integer" in caught.value.message
@@ -73,17 +73,17 @@ class ParseTest(unittest.TestCase):
 
 class InputJsonTest(unittest.TestCase):
     def test_a_literal_value_is_used_as_written(self) -> None:
-        assert cli.parse(["--input-json", '{"a": 1}']).options.input_json == '{"a": 1}'
+        assert cli.parse(["--input-json", '{"a": 1}']).options.request.input_json == '{"a": 1}'
 
     def test_a_dash_reads_standard_input(self) -> None:
         with unittest.mock.patch.object(sys, "stdin", io.StringIO('{"a": 1}')):
-            assert cli.parse(["--input-json", "-"]).options.input_json == '{"a": 1}'
+            assert cli.parse(["--input-json", "-"]).options.request.input_json == '{"a": 1}'
 
     def test_an_at_prefix_reads_a_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "body.json"
             path.write_text('{"a": 1}', encoding="utf-8")
-            assert cli.parse(["--input-json", f"@{path}"]).options.input_json == '{"a": 1}'
+            assert cli.parse(["--input-json", f"@{path}"]).options.request.input_json == '{"a": 1}'
 
     def test_an_unreadable_file_is_a_usage_failure(self) -> None:
         with pytest.raises(UsageError) as caught:

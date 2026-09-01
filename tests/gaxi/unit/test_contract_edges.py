@@ -17,7 +17,6 @@ from gaxi.jsonbody import validate_json_body
 from gaxi.planner import Planner
 from gaxi.projection import observed_fields, validate_fields
 from gaxi.repo_context import RepositoryContext
-from gaxi.session import Options
 from gaxi.transport import RecordingTransport, Response
 from tests.gaxi import support
 from tests.gaxi.fixtures import DOCUMENT
@@ -158,13 +157,13 @@ class PlannerEdgeTest(unittest.TestCase):
     def test_a_literal_child_route_is_not_a_detail_suggestion(self) -> None:
         cap = CATALOG.by_key["get:/repos/{owner}/{repo}/issues/{index}"]
         binding: Any = unittest.mock.Mock(query=[], body=None)
-        planner = Planner(CATALOG, cap, "/repos/acme/widgets/issues/1", binding, Options())
+        planner = Planner(CATALOG, cap, "/repos/acme/widgets/issues/1", binding)
         assert planner.detail_suggestion() is None
 
     def test_a_supplied_filter_value_is_not_suggested_again(self) -> None:
         cap = CATALOG.by_key["get:/repos/{owner}/{repo}/pulls"]
         binding: Any = unittest.mock.Mock(query=[("state", "open")], body=None)
-        planner = Planner(CATALOG, cap, "/repos/acme/widgets/pulls", binding, Options())
+        planner = Planner(CATALOG, cap, "/repos/acme/widgets/pulls", binding)
         suggestion = planner.alternative_filter()
         assert suggestion is not None
         assert "state=closed" in suggestion
@@ -220,7 +219,7 @@ class LastArcsTest(unittest.TestCase):
         catalog = Catalog.from_document(raw, origin=support.ORIGIN)
         cap = catalog.by_key["get:/things"]
         binding: Any = unittest.mock.Mock(query=[("state", "open")], body=None)
-        planner = Planner(catalog, cap, "/things", binding, Options())
+        planner = Planner(catalog, cap, "/things", binding)
         assert planner.alternative_filter() is None
 
     def test_a_dry_run_of_a_capability_without_an_operation_id(self) -> None:

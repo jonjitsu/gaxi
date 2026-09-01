@@ -28,7 +28,6 @@ from gaxi.planner import (
 from gaxi.policy import Policy
 from gaxi.projection import validate_fields
 from gaxi.repo_context import RepositoryContext, parse_remote
-from gaxi.session import Options
 from gaxi.suggestions import build
 from tests.gaxi import support
 from tests.gaxi.fixtures import DOCUMENT
@@ -112,7 +111,7 @@ class PlannerEdgeTest(unittest.TestCase):
     def planner(self, key: str, path: str, **query: str) -> Planner:
         cap = CATALOG.by_key[key]
         binding: Any = unittest.mock.Mock(query=list(query.items()), body=None)
-        return Planner(CATALOG, cap, path, binding, Options())
+        return Planner(CATALOG, cap, path, binding)
 
     def test_a_top_level_path_has_no_parent_collection(self) -> None:
         assert self.planner("get:/user", "/user").parent_collection() is None
@@ -134,7 +133,7 @@ class PlannerEdgeTest(unittest.TestCase):
     def test_body_assignments_are_carried_into_a_retry(self) -> None:
         cap = CATALOG.by_key["post:/repos/{owner}/{repo}/issues"]
         binding: Any = unittest.mock.Mock(query=[], body={"title": "Ship", "labels": [1]})
-        planner = Planner(CATALOG, cap, "/repos/acme/widgets/issues", binding, Options())
+        planner = Planner(CATALOG, cap, "/repos/acme/widgets/issues", binding)
         assert "body:title=Ship" in planner.retry()
         assert "labels" not in planner.retry()
 
@@ -147,7 +146,7 @@ class PlannerEdgeTest(unittest.TestCase):
     def test_a_mutation_detail_suggests_the_created_entity(self) -> None:
         cap = CATALOG.by_key["post:/repos/{owner}/{repo}/issues"]
         binding: Any = unittest.mock.Mock(query=[], body={"title": "Ship"})
-        planner = Planner(CATALOG, cap, "/repos/acme/widgets/issues", binding, Options())
+        planner = Planner(CATALOG, cap, "/repos/acme/widgets/issues", binding)
         classification = Classification(
             "object", payload={"id": 277, "number": 7, "title": "Ship"},
         )
@@ -226,7 +225,7 @@ class PlannerEdgeTest(unittest.TestCase):
         catalog = Catalog.from_document(raw, origin=support.ORIGIN)
         cap = catalog.by_key["get:/repos/{owner}/{repo}/tags"]
         binding: Any = unittest.mock.Mock(query=[], body=None)
-        planner = Planner(catalog, cap, "/repos/acme/widgets/tags", binding, Options())
+        planner = Planner(catalog, cap, "/repos/acme/widgets/tags", binding)
         assert planner.detail_suggestion(["id", "name"]) == (
             "gaxi get /repos/acme/widgets/tags/<tag>"
         )
@@ -271,7 +270,7 @@ class PlannerEdgeTest(unittest.TestCase):
                 continue
             binding: Any = unittest.mock.Mock(query=[], body=None)
             concrete_path = re.sub(r"\{[^{}]+\}", "acme", cap.path)
-            planner = Planner(catalog, cap, concrete_path, binding, Options())
+            planner = Planner(catalog, cap, concrete_path, binding)
             planner.session = session
             for _child_cap, rest in planner._child_of(cap.path):
                 match = re.fullmatch(r"\{([^{}]+)\}", rest[0])
@@ -321,7 +320,7 @@ class PlannerEdgeTest(unittest.TestCase):
         catalog = Catalog.from_document(raw, origin=support.ORIGIN)
         cap = catalog.by_key["post:/repos/{owner}/{repo}/issues"]
         binding: Any = unittest.mock.Mock(query=[], body={"title": "Ship"})
-        planner = Planner(catalog, cap, "/repos/acme/widgets/issues", binding, Options())
+        planner = Planner(catalog, cap, "/repos/acme/widgets/issues", binding)
         classification = Classification("object", payload={"title": "Ship"})
         suggestions = planner.for_detail(classification, effect="mutate")
         assert suggestions == [
@@ -376,7 +375,7 @@ class PlannerEdgeTest(unittest.TestCase):
     def test_a_mutate_with_a_non_object_payload_falls_back(self) -> None:
         cap = CATALOG.by_key["post:/repos/{owner}/{repo}/issues"]
         binding: Any = unittest.mock.Mock(query=[], body={"title": "Ship"})
-        planner = Planner(CATALOG, cap, "/repos/acme/widgets/issues", binding, Options())
+        planner = Planner(CATALOG, cap, "/repos/acme/widgets/issues", binding)
         suggestions = planner.for_detail(Classification("object", payload=None), effect="mutate")
         assert suggestions == []
 
