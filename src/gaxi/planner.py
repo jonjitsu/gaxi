@@ -34,9 +34,11 @@ UNPROCESSABLE = 422
 PLACEHOLDER = re.compile(r"^\{([^{}]+)\}$")
 
 # Path-parameter names and their payload synonyms, tried before the generic fallback.
+_LOGIN_SYNONYMS = ("login", "username", "org", "assignee", "collaborator", "user")
 _PARAM_SYNONYMS: dict[str, tuple[str, ...]] = {
     "index": ("index", "number"),
     "number": ("number", "index"),
+    **dict.fromkeys(_LOGIN_SYNONYMS, _LOGIN_SYNONYMS),
 }
 
 
@@ -96,12 +98,24 @@ class Planner:
                 found.append((cap, rest))
         return found
 
-    def detail_suggestion(self) -> str | None:
+    def detail_suggestion(
+        self,
+        fields: Sequence[str] | None = None,
+        *,
+        allow_policy_fallback: bool = True,
+    ) -> str | None:
         """`get <path>/<identifier>` when the catalog advertises the detail route."""
         for _cap, rest in self._child_of(self.cap.path):
             match = PLACEHOLDER.match(rest[0])
             if match:
-                return command("get", f"{self.path.rstrip('/')}/<{match.group(1)}>")
+                placeholder = _detail_placeholder(
+                    self.cap,
+                    match.group(1),
+                    fields,
+                    self.session,
+                    allow_policy_fallback=allow_policy_fallback,
+                )
+                return command("get", f"{self.path.rstrip('/')}/<{placeholder}>")
         return None
 
     def related_suggestions(self, limit: int = 2) -> list[str]:
@@ -175,9 +189,18 @@ class Planner:
         return command(self.cap.method, self.path, self._fixed_assignments(skip=()), options)
 
     # composition -----------------------------------------------------------
-    def for_collection(self, classification: Classification) -> list[str]:
+    def for_collection(
+        self,
+        classification: Classification,
+        fields: Sequence[str] | None = None,
+        *,
+        allow_policy_fallback: bool = True,
+    ) -> list[str]:
         """Next actions for a collection result."""
-        suggestions = [self.detail_suggestion(), self.next_page(classification)]
+        suggestions = [
+            self.detail_suggestion(fields, allow_policy_fallback=allow_policy_fallback),
+            self.next_page(classification),
+        ]
         if not any(suggestions):
             suggestions.append(self.alternative_filter())
         return _first(suggestions, 2)
@@ -241,6 +264,49 @@ def _int(value: str | None) -> int | None:
         return int(value)
     except ValueError:
         return None
+
+
+def _first_identifier_field(fields: Sequence[str]) -> str | None:
+    for field in fields:
+        root = field.split(".")[0]
+        if root in IDENTIFIER_FIELDS:
+            return root
+    return None
+
+
+def _placeholder_compatible(path_param: str, field_name: str) -> bool:
+    if field_name == path_param:
+        return True
+    return field_name in _PARAM_SYNONYMS.get(path_param, ())
+
+
+def _compatible_identifier(fields: Sequence[str], path_param: str) -> str | None:
+    if (
+        (name := _first_identifier_field(fields))
+        and _placeholder_compatible(path_param, name)
+    ):
+        return name
+    return None
+
+
+def _detail_placeholder(
+    cap: Capability,
+    path_param: str,
+    fields: Sequence[str] | None,
+    session: Session | None,
+    *,
+    allow_policy_fallback: bool = True,
+) -> str:
+    """The placeholder name that matches the projected identifier when declared."""
+    if fields is not None and (name := _compatible_identifier(fields, path_param)):
+        return name
+    if fields is not None and not allow_policy_fallback:
+        return path_param
+    if allow_policy_fallback and session is not None:
+        projection = session.policy.resolve(cap).projection
+        if projection and (name := _compatible_identifier(projection, path_param)):
+            return name
+    return path_param
 
 
 def _identifier_from_payload(payload: dict[str, JsonValue], param: str) -> JsonValue | None:

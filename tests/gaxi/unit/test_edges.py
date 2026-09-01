@@ -1,6 +1,7 @@
 """The remaining edges: fallbacks, overlays, and entry points."""
 
 import copy
+import re
 import subprocess
 import unittest
 import unittest.mock
@@ -18,7 +19,12 @@ from gaxi.discovery import _remote_origin, _sole_remote_origin
 from gaxi.document import Document
 from gaxi.encode import _yaml_lines, to_yaml
 from gaxi.jsonbody import _json_type_matches, body_properties
-from gaxi.planner import Planner, _identifier_from_payload, _is_usable_identifier
+from gaxi.planner import (
+    Planner,
+    _identifier_from_payload,
+    _is_usable_identifier,
+    _placeholder_compatible,
+)
 from gaxi.policy import Policy
 from gaxi.projection import validate_fields
 from gaxi.repo_context import RepositoryContext, parse_remote
@@ -147,6 +153,152 @@ class PlannerEdgeTest(unittest.TestCase):
         suggestions = planner.for_detail(classification, effect="mutate")
         assert suggestions[0] == "gaxi get /repos/acme/widgets/issues/7"
         assert suggestions[1] == "gaxi get /repos/acme/widgets/issues/7/comments"
+
+    def test_detail_suggestion_uses_the_projected_identifier_placeholder(self) -> None:
+        planner = self.planner(
+            "get:/repos/{owner}/{repo}/issues", "/repos/acme/widgets/issues",
+        )
+        suggestion = planner.detail_suggestion(["number", "title", "state", "updated_at"])
+        assert suggestion == "gaxi get /repos/acme/widgets/issues/<number>"
+
+    def test_detail_suggestion_falls_back_to_the_path_parameter(self) -> None:
+        planner = self.planner(
+            "get:/repos/{owner}/{repo}/issues", "/repos/acme/widgets/issues",
+        )
+        assert planner.detail_suggestion() == "gaxi get /repos/acme/widgets/issues/<index>"
+        assert planner.detail_suggestion(["title", "state"]) == (
+            "gaxi get /repos/acme/widgets/issues/<index>"
+        )
+
+    def test_detail_suggestion_uses_policy_projection_when_fields_omit_it(self) -> None:
+        session = support.make_session()
+        planner = self.planner(
+            "get:/repos/{owner}/{repo}/issues", "/repos/acme/widgets/issues",
+        )
+        planner.session = session
+        assert planner.detail_suggestion() == "gaxi get /repos/acme/widgets/issues/<number>"
+        assert planner.detail_suggestion(["title", "state"], allow_policy_fallback=False) == (
+            "gaxi get /repos/acme/widgets/issues/<index>"
+        )
+
+    def test_detail_suggestion_rejects_an_incompatible_projected_identifier(self) -> None:
+        planner = self.planner(
+            "get:/repos/{owner}/{repo}/issues", "/repos/acme/widgets/issues",
+        )
+        assert planner.detail_suggestion(["id", "title", "state"]) == (
+            "gaxi get /repos/acme/widgets/issues/<index>"
+        )
+
+    def test_detail_suggestion_keeps_a_name_keyed_path_parameter(self) -> None:
+        raw: dict[str, Any] = copy.deepcopy(DOCUMENT)
+        raw["definitions"]["Tag"] = {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "name": {"type": "string"},
+            },
+        }
+        raw["paths"]["/repos/{owner}/{repo}/tags"] = {
+            "get": {
+                "operationId": "repoListTags",
+                "parameters": raw["paths"]["/repos/{owner}/{repo}/pulls"]["get"]["parameters"][:2],
+                "responses": {
+                    "200": {
+                        "description": "TagList",
+                        "schema": {"type": "array", "items": {"$ref": "#/definitions/Tag"}},
+                    },
+                },
+            },
+        }
+        raw["paths"]["/repos/{owner}/{repo}/tags/{tag}"] = {
+            "get": {
+                "operationId": "repoGetTag",
+                "parameters": [
+                    *raw["paths"]["/repos/{owner}/{repo}/pulls"]["get"]["parameters"][:2],
+                    {"name": "tag", "in": "path", "type": "string", "required": True},
+                ],
+                "responses": {
+                    "200": {"description": "Tag", "schema": {"$ref": "#/definitions/Tag"}},
+                },
+            },
+        }
+        catalog = Catalog.from_document(raw, origin=support.ORIGIN)
+        cap = catalog.by_key["get:/repos/{owner}/{repo}/tags"]
+        binding: Any = unittest.mock.Mock(query=[], body=None)
+        planner = Planner(catalog, cap, "/repos/acme/widgets/tags", binding, Options())
+        assert planner.detail_suggestion(["id", "name"]) == (
+            "gaxi get /repos/acme/widgets/tags/<tag>"
+        )
+
+    def test_detail_suggestions_use_only_compatible_placeholders(self) -> None:
+        raw: dict[str, Any] = copy.deepcopy(DOCUMENT)
+        raw["definitions"]["Tag"] = {
+            "type": "object",
+            "properties": {"id": {"type": "string"}, "name": {"type": "string"}},
+        }
+        raw["paths"]["/repos/{owner}/{repo}/tags"] = {
+            "get": {
+                "operationId": "repoListTags",
+                "parameters": raw["paths"]["/repos/{owner}/{repo}/pulls"]["get"]["parameters"][:2],
+                "responses": {
+                    "200": {
+                        "description": "TagList",
+                        "schema": {"type": "array", "items": {"$ref": "#/definitions/Tag"}},
+                    },
+                },
+            },
+        }
+        raw["paths"]["/repos/{owner}/{repo}/tags/{tag}"] = {
+            "get": {
+                "operationId": "repoGetTag",
+                "parameters": [
+                    *raw["paths"]["/repos/{owner}/{repo}/pulls"]["get"]["parameters"][:2],
+                    {"name": "tag", "in": "path", "type": "string", "required": True},
+                ],
+                "responses": {
+                    "200": {"description": "Tag", "schema": {"$ref": "#/definitions/Tag"}},
+                },
+            },
+        }
+        catalog = Catalog.from_document(raw, origin=support.ORIGIN)
+        session = support.make_session()
+        for cap in catalog.available():
+            if cap.method != "get":
+                continue
+            props = session.policy.resolve(cap)
+            if props.response != "collection":
+                continue
+            binding: Any = unittest.mock.Mock(query=[], body=None)
+            concrete_path = re.sub(r"\{[^{}]+\}", "acme", cap.path)
+            planner = Planner(catalog, cap, concrete_path, binding, Options())
+            planner.session = session
+            for _child_cap, rest in planner._child_of(cap.path):
+                match = re.fullmatch(r"\{([^{}]+)\}", rest[0])
+                if not match:
+                    continue
+                path_param = match.group(1)
+                suggestion = planner.detail_suggestion()
+                assert suggestion is not None
+                placeholder = suggestion.rsplit("<", 1)[-1][:-1]
+                assert _placeholder_compatible(path_param, placeholder), (
+                    f"{cap.key} suggested <{placeholder}> for {{{path_param}}}"
+                )
+                break
+
+    def test_detail_suggestion_keeps_the_path_parameter_without_a_declared_identifier(
+        self,
+    ) -> None:
+        session = support.make_session()
+        props = Policy().resolve(CATALOG.by_key["get:/repos/{owner}/{repo}/issues"])
+        props.projection = ["title", "state"]
+        planner = self.planner(
+            "get:/repos/{owner}/{repo}/issues", "/repos/acme/widgets/issues",
+        )
+        planner.session = session
+        with unittest.mock.patch.object(session.policy, "resolve", return_value=props):
+            assert planner.detail_suggestion(["title", "state"]) == (
+                "gaxi get /repos/acme/widgets/issues/<index>"
+            )
 
     def test_a_mutation_without_an_identifier_falls_back_to_collection_siblings(self) -> None:
         raw: dict[str, Any] = copy.deepcopy(DOCUMENT)

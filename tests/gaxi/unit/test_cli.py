@@ -30,6 +30,7 @@ class CollectionTest(unittest.TestCase):
             "  41,Fix race,open,2026-08-29T18:12:00Z",
             "  37,Update docs,open,2026-08-28T09:31:00Z",
         ]
+        assert "- gaxi get /repos/acme/widgets/pulls/<number>" in out
         assert session.requests == 1
 
     def test_default_page_and_limit_are_sent(self) -> None:

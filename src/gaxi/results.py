@@ -190,7 +190,11 @@ def _collection_document(inv: Invocation, classification: Classification) -> Doc
             total=classification.total,
             help_commands=inv.planner.for_empty_collection(),
         )
-    help_commands = inv.planner.for_collection(classification)
+    help_commands = inv.planner.for_collection(
+        classification,
+        fields,
+        allow_policy_fallback=not inv.options.fields,
+    )
     if truncations:
         help_commands = _capped(help_commands, inv.planner.fields_full(fields))
     return render.collection(

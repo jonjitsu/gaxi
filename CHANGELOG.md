@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Collection `help[]` detail suggestions now name placeholders after the
+  projected identifier column when that column is the detail route parameter or
+  a declared synonym (for example `<number>` for `{index}`), instead of blindly
+  adopting any identifier-shaped field such as `<id>` on a `{tag}` route.
 - `--debug` now logs description-discovery HTTP requests on stderr, not only
   capability calls. Cold cache discovery is typically two requests (discovery
   page plus description document, on the order of hundreds of kilobytes) and is
