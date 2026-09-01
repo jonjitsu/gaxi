@@ -1,0 +1,67 @@
+name: release-tag
+
+# Merging the standing release pull request is the release. The version is read
+# back out of the merged tree rather than recomputed, so the tag names exactly
+# what was reviewed and tested.
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    name: Tag the merged release
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged && github.event.pull_request.head.ref == 'release/next'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: "3.13"
+      - name: Sync the development environment
+        run: uv sync --all-groups --frozen
+
+      - name: Read the released version
+        id: released
+        run: |
+          echo "version=$(uv run python -c 'import release; print(release.current_version(release.PYPROJECT.read_text()))')" >> "$GITHUB_OUTPUT"
+
+      - name: Refuse to retag
+        env:
+          VERSION: ${{ steps.released.outputs.version }}
+        run: |
+          if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+            echo "$VERSION is already tagged" >&2
+            exit 1
+          fi
+
+      - name: Tag the release
+        env:
+          VERSION: ${{ steps.released.outputs.version }}
+        run: |
+          git config user.name "gaxi release"
+          git config user.email "noreply@gitea.home.arpa"
+          git tag -a "$VERSION" -m "gaxi $VERSION"
+          git push origin "$VERSION"
+
+      - name: Publish the release
+        env:
+          GITEA_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          VERSION: ${{ steps.released.outputs.version }}
+          REPO: ${{ github.repository }}
+          API: ${{ github.server_url }}/api/v1
+        run: |
+          jq -n --arg t "$VERSION" --arg b "$(uv run invoke release-notes)" \
+            '{tag_name:$t, name:("gaxi " + $t), body:$b}' | \
+          curl -sf -X POST -H "Authorization: token $GITEA_TOKEN" \
+            -H "Content-Type: application/json" -d @- \
+            "$API/repos/$REPO/releases" > /dev/null
+          echo "published $VERSION"

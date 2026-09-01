@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Automated releasing behind a standing release pull request. Every merge to
+  `master` refreshes a `release/next` branch carrying the version bump, the
+  relocked `uv.lock`, and the `## Unreleased` section retitled to the version
+  being cut; merging that pull request is the release, and a second workflow
+  tags the merge commit. The bump therefore passes the ordinary gate as a
+  reviewed change, so the commit that gets tagged is the commit CI tested, and
+  no workflow pushes to `master`. The bump level comes from the Conventional
+  Commits types since the last tag, and any commit whose type is unrecognised is
+  reported rather than silently counted as a patch. Release mechanics live in
+  `automation/ci/` — version arithmetic, commit reading, changelog promotion
+  and the project file kept apart — and are driven by `invoke release-prepare`
+  and `invoke release-notes` from `automation/ci/tasks/`, which the root
+  `tasks.py` puts on the path. Keeping the automation outside `src/` means it
+  is never packaged, so the wheel stays a single top-level `gaxi`. The changelog
+  itself is still written by hand as work lands; releasing renames its section
+  rather than deriving prose from commit subjects.
 - Released gaxi as a Nix package: `packages/gaxi` builds the console script with
   `buildPythonApplication` against nixpkgs' Python 3.13 and gates on the offline
   suites (`tests/gaxi/{unit,properties}`), and the root `package.nix` maps it to

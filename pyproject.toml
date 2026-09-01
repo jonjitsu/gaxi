@@ -27,7 +27,7 @@ where = ["src"]
 
 [tool.python-codeforge]
 packages = ["gaxi"]
-targets = ["src", "tests", "tasks.py"]
+targets = ["src", "tests", "tasks.py", "automation"]
 
 [tool.python-codeforge.quality]
 # Radon's maintainability index falls with module length regardless of how clear
@@ -37,7 +37,7 @@ targets = ["src", "tests", "tasks.py"]
 mi_floor = 20
 
 [tool.ruff]
-src = ["src", "tests"]
+src = ["src", "tests", "automation"]
 line-length = 100
 target-version = "py313"
 
@@ -54,7 +54,7 @@ ignore = [
 flake8-annotations = { mypy-init-return = true, suppress-none-returning = false }
 
 [tool.ruff.lint.per-file-ignores]
-"tasks.py" = ["T201"]  # print is a task's output channel
+"automation/ci/tasks/**" = ["T201"]  # print is a task's output channel
 # Test suites assert with `assert`, name their intent instead of documenting it,
 # reach into the internals of the unit under test, and stand in for collaborators
 # with small doubles whose signatures they do not fully use.
@@ -77,15 +77,15 @@ flake8-annotations = { mypy-init-return = true, suppress-none-returning = false 
 max-args = 8
 
 [tool.ruff.lint.isort]
-known-first-party = ["gaxi"]
+known-first-party = ["gaxi", "ci"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
 [tool.mypy]
 python_version = "3.13"
-files = ["src", "tests", "tasks.py"]
-mypy_path = ["src", "."]
+files = ["src", "tests", "tasks.py", "automation"]
+mypy_path = ["src", ".", "automation"]
 explicit_package_bases = true
 namespace_packages = true
 strict = true
@@ -105,7 +105,7 @@ module = ["invoke.*"]
 ignore_missing_imports = true
 
 [tool.pyright]
-include = ["src", "tests", "tasks.py"]
+include = ["src", "tests", "tasks.py", "automation"]
 pythonVersion = "3.13"
 typeCheckingMode = "strict"
 reportMissingTypeStubs = "warning"
@@ -122,10 +122,13 @@ reportUnnecessaryTypeIgnoreComment = "error"
 
 [[tool.pyright.executionEnvironments]]
 root = "."
+# `automation` is not installed, so its import root has to be declared.
+extraPaths = ["src", "automation"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
+pythonpath = ["automation"]
 addopts = ["--strict-markers", "--strict-config", "-ra"]
 markers = [
   "slow: long-running tests",
@@ -154,7 +157,7 @@ output = ".coverage.json"
 exclude_dirs = ["tests", ".venv", "build", "dist"]
 
 [tool.vulture]
-paths = ["src", "tests", "tasks.py"]
+paths = ["src", "tests", "tasks.py", "automation"]
 exclude = [".venv"]
 min_confidence = 80
 sort_by_size = true

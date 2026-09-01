@@ -1,0 +1,98 @@
+name: release-prepare
+
+# Every merge to master refreshes a standing "Release X.Y.Z" pull request that
+# carries the version bump and the retitled changelog section. Nothing is
+# released here: merging that pull request is the decision, and `release-tag`
+# turns it into a tag. The bump therefore passes through the same gate as any
+# other change, and the commit that gets tagged is the commit CI tested.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: release-prepare
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  prepare:
+    name: Refresh the release pull request
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # bump inference reads the log back to the last tag
+          token: ${{ secrets.RELEASE_TOKEN }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: "3.13"
+      - name: Sync the development environment
+        run: uv sync --all-groups --frozen
+
+      # Right after a release lands, `## Unreleased` is empty and this is a
+      # no-op. Whether the tree changed is the signal, not the commit message:
+      # a squash merge rewrites the message, so matching on it is unreliable.
+      - name: Prepare the bump
+        id: prepare
+        run: |
+          uv run invoke release-prepare
+          if git diff --quiet; then
+            echo "prepared=false" >> "$GITHUB_OUTPUT"
+            echo "nothing to release"
+            exit 0
+          fi
+          echo "prepared=true" >> "$GITHUB_OUTPUT"
+          echo "version=$(uv run python -c 'import release; print(release.current_version(release.PYPROJECT.read_text()))')" >> "$GITHUB_OUTPUT"
+
+      # The bump changes the installed distribution's version, and the suite
+      # asserts `gaxi.__version__` matches pyproject, so the environment has to
+      # follow the new lock before the gate runs.
+      - name: Re-sync onto the bumped lock
+        if: steps.prepare.outputs.prepared == 'true'
+        run: uv sync --all-groups --frozen
+
+      - name: Verify the prepared tree
+        if: steps.prepare.outputs.prepared == 'true'
+        run: uv run invoke verify
+
+      - name: Push the release branch
+        if: steps.prepare.outputs.prepared == 'true'
+        env:
+          VERSION: ${{ steps.prepare.outputs.version }}
+        run: |
+          git config user.name "gaxi release"
+          git config user.email "noreply@gitea.home.arpa"
+          git switch -C release/next
+          git commit -am "release: $VERSION"
+          git push --force origin release/next
+
+      - name: Open or update the release pull request
+        if: steps.prepare.outputs.prepared == 'true'
+        env:
+          GITEA_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          VERSION: ${{ steps.prepare.outputs.version }}
+          REPO: ${{ github.repository }}
+          API: ${{ github.server_url }}/api/v1
+        run: |
+          body=$(uv run invoke release-notes)
+          existing=$(curl -sf -H "Authorization: token $GITEA_TOKEN" \
+            "$API/repos/$REPO/pulls?state=open&head=release/next" | jq -r '.[0].number // empty')
+          payload=$(jq -n --arg t "Release $VERSION" --arg b "$body" \
+            '{title:$t, body:$b, head:"release/next", base:"master"}')
+          if [ -n "$existing" ]; then
+            curl -sf -X PATCH -H "Authorization: token $GITEA_TOKEN" \
+              -H "Content-Type: application/json" -d "$payload" \
+              "$API/repos/$REPO/pulls/$existing" > /dev/null
+            echo "updated pull request #$existing to $VERSION"
+          else
+            curl -sf -X POST -H "Authorization: token $GITEA_TOKEN" \
+              -H "Content-Type: application/json" -d "$payload" \
+              "$API/repos/$REPO/pulls" > /dev/null
+            echo "opened a release pull request for $VERSION"
+          fi
