@@ -38,7 +38,8 @@ interface, not prose. Two rules, both load-bearing.
 
 **Write [Conventional Commits](https://www.conventionalcommits.org) subjects.**
 `type(scope): subject`, where the type is one of `build`, `chore`, `ci`, `docs`,
-`feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`. The release
+`feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`. The pipeline also
+recognises `release`, which it writes itself; do not use it by hand. The release
 pipeline derives the version bump from the types since the last tag:
 
 | Commit | Bump |

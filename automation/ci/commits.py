@@ -22,6 +22,11 @@ _BREAKING_TRAILER = re.compile(r"^BREAKING[ -]CHANGE:", re.MULTILINE)
 TYPES = frozenset({
     "build", "chore", "ci", "docs", "feat", "fix",
     "perf", "refactor", "revert", "style", "test",
+    # `release-prepare` writes `release: X.Y.Z`. That commit is the one the tag
+    # lands on, so it normally falls outside `tag..HEAD` and is never read back
+    # — but a release whose tagging failed leaves it inside the window, and it
+    # should not be reported as untyped while someone is debugging that.
+    "release",
 })
 
 
