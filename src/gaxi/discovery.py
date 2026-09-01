@@ -7,6 +7,7 @@ import json
 import os
 import re
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urljoin
@@ -22,6 +23,8 @@ if TYPE_CHECKING:
     from gaxi.jsonshape import JsonObject
     from gaxi.repo_context import Remote, RepositoryContext
     from gaxi.transport import Exchange, Response
+
+LogRequest = Callable[[str, str], None]
 
 DISCOVERY_PATH = "/api/swagger"
 FALLBACK_DOCUMENT = "/swagger.v1.json"
@@ -165,14 +168,33 @@ def _ttl() -> int:
         return DEFAULT_TTL
 
 
+def _send(
+    transport: Exchange,
+    method: str,
+    url: str,
+    headers: Mapping[str, str] | None = None,
+    *,
+    log_request: LogRequest | None = None,
+) -> Response:
+    if log_request is not None:
+        log_request(method.upper(), url)
+    return transport.send(method, url, headers=headers)
+
+
 def load_catalog(
     origin: str,
     transport: Exchange,
     cache_dir: Path | str | None = None,
     *,
     refresh: bool = False,
+    log_request: LogRequest | None = None,
 ) -> tuple[Catalog, int]:
-    """Fetch and compile the instance description, using conditional caching."""
+    """Fetch and compile the instance description, using conditional caching.
+
+    On a cold cache this usually performs two HTTP requests (discovery page and
+    description document), totalling on the order of hundreds of kilobytes.
+    Cached results are reused for ``GAXI_CACHE_TTL`` seconds (default 3600).
+    """
     path = _cache_path(origin, cache_dir)
     cached = None if refresh else _read_cache(path)
     now = time.time()
@@ -180,13 +202,17 @@ def load_catalog(
         return Catalog.from_document(cached["document"], origin=origin), 0
     requests = 0
     if cached and cached.get("source_url"):
-        revalidated = _revalidate(origin, transport, path, cached, now)
+        revalidated = _revalidate(
+            origin, transport, path, cached, now, log_request=log_request,
+        )
         requests += 1
         if revalidated is not None:
             return revalidated, requests
-    source_url, extra = _discover_document_url(origin, transport)
+    source_url, extra = _discover_document_url(
+        origin, transport, log_request=log_request,
+    )
     requests += extra
-    response = transport.send("GET", source_url)
+    response = _send(transport, "GET", source_url, log_request=log_request)
     requests += 1
     if response.status != STATUS_OK:
         msg = f"instance description request failed with status {response.status}"
@@ -217,10 +243,18 @@ def _revalidate(
     path: Path,
     cached: JsonObject,
     now: float,
+    *,
+    log_request: LogRequest | None = None,
 ) -> Catalog | None:
     """Re-check a cached description; None when the instance did not answer usably."""
     source_url = cached["source_url"]
-    response = transport.send("GET", source_url, headers=_conditional_headers(cached))
+    response = _send(
+        transport,
+        "GET",
+        source_url,
+        headers=_conditional_headers(cached),
+        log_request=log_request,
+    )
     if response.status == STATUS_NOT_MODIFIED:
         cached["fetched"] = now
         _write_cache(path, cached)
@@ -268,10 +302,15 @@ def _parse_document(response: Response, source_url: str) -> JsonObject:
     return document
 
 
-def _discover_document_url(origin: str, transport: Exchange) -> tuple[str, int]:
+def _discover_document_url(
+    origin: str,
+    transport: Exchange,
+    *,
+    log_request: LogRequest | None = None,
+) -> tuple[str, int]:
     """Resolve the description URL from the instance's discovery page."""
     discovery_url = origin + DISCOVERY_PATH
-    response = transport.send("GET", discovery_url)
+    response = _send(transport, "GET", discovery_url, log_request=log_request)
     body = response.read_all().decode(response.charset, "replace")
     if response.status == STATUS_OK:
         if response.media_type == "application/json":

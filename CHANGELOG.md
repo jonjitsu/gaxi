@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `--debug` now logs description-discovery HTTP requests on stderr, not only
+  capability calls. Cold cache discovery is typically two requests (discovery
+  page plus description document, on the order of hundreds of kilobytes) and is
+  cached for ``GAXI_CACHE_TTL`` seconds (default 3600).
 - A 403 with a resolved credential now names the credential source in the
   error and suggests checking the authenticated identity instead of
   re-authenticating. `auth add` remains the suggestion for 401 and for 403 when

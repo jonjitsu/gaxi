@@ -33,7 +33,9 @@ GLOBAL_OPTIONS: list[Option] = [
     ("--anonymous", "flag", "false", "Send no credential even when one is bound to the origin."),
     ("--refresh", "flag", "false", "Re-fetch the instance description instead of using the cache."),
     ("--timeout <seconds>", "integer", "30", "HTTP timeout for one request."),
-    ("--debug", "flag", "false", "Write incidental diagnostics to stderr."),
+    ("--debug", "flag", "false",
+     ("Write incidental diagnostics to stderr (one line per HTTP request, "
+      "including description discovery).")),
 ]
 
 REQUEST_OPTIONS: list[Option] = [

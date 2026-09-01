@@ -1,6 +1,7 @@
 """Session resolution, capability detail, setup, and next-action planning."""
 
 import io
+import json
 import sys
 import tempfile
 import unittest
@@ -18,7 +19,7 @@ from gaxi.errors import EXIT_USAGE, GaxiError
 from gaxi.projection import cell_value, resolve_path, validate_fields
 from gaxi.repo_context import RepositoryContext, parse_remote
 from gaxi.session import Options, Session
-from gaxi.transport import Response
+from gaxi.transport import RecordingTransport, Response
 from tests.gaxi import support
 from tests.gaxi.fixtures import DOCUMENT
 from tests.gaxi.support import json_response, response, run_cli
@@ -79,6 +80,34 @@ class SessionTest(unittest.TestCase):
         finally:
             sys.stderr = original
         assert "GET https://gitea.example.com/api/v1/user" in stream.getvalue()
+
+    def test_debug_logs_catalog_discovery_requests(self) -> None:
+        page = Response(
+            200,
+            [("Content-Type", "text/html")],
+            b'<div data-source="/swagger.v1.json"></div>',
+        )
+        document = Response(
+            200,
+            [("Content-Type", "application/json")],
+            json.dumps(DOCUMENT).encode("utf-8"),
+        )
+        session = Session(
+            Options(debug=True, refresh=True),
+            transport=RecordingTransport([page, document]),
+            env={"GITEA_SERVER": support.ORIGIN},
+            config=Config({}),
+            repository=RepositoryContext(),
+        )
+        stream = io.StringIO()
+        original, sys.stderr = sys.stderr, stream
+        try:
+            assert session.instance.origin == support.ORIGIN
+        finally:
+            sys.stderr = original
+        output = stream.getvalue()
+        assert "GET https://gitea.example.com/api/swagger" in output
+        assert "GET https://gitea.example.com/swagger.v1.json" in output
 
 
 class CatalogSelectionTest(unittest.TestCase):

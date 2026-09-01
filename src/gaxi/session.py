@@ -99,7 +99,10 @@ class Session:
                 self.config, self.repository, self.options.server, self.env,
             )
             catalog, requests = load_catalog(
-                origin, self.transport, refresh=self.options.refresh,
+                origin,
+                self.transport,
+                refresh=self.options.refresh,
+                log_request=self._log_discovery_request if self.options.debug else None,
             )
             self.requests += requests
             self._instance = Instance(origin, source, catalog, requests)
@@ -160,3 +163,7 @@ class Session:
         if not self.options.debug:
             return
         sys.stderr.write("gaxi: " + redact(message, self.secrets) + "\n")
+
+    def _log_discovery_request(self, method: str, url: str) -> None:
+        """Trace one description-discovery request through the debug sink."""
+        self.debug(f"{method} {url}")

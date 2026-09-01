@@ -83,12 +83,22 @@ class CatalogFetchTest(unittest.TestCase):
         self.directory = tempfile.mkdtemp()
 
     def test_discovery_page_points_at_the_description(self) -> None:
+        logged: list[tuple[str, str]] = []
         transport = RecordingTransport([
             html('<div id="swagger-ui" data-source="/swagger.v1.json"></div>'),
             swagger({"ETag": '"v1"'}),
         ])
-        catalog, requests = load_catalog(support.ORIGIN, transport, self.directory)
+        catalog, requests = load_catalog(
+            support.ORIGIN,
+            transport,
+            self.directory,
+            log_request=lambda method, url: logged.append((method, url)),
+        )
         assert requests == 2
+        assert logged == [
+            ("GET", "https://gitea.example.com/api/swagger"),
+            ("GET", "https://gitea.example.com/swagger.v1.json"),
+        ]
         assert transport.requests[1]["url"] == "https://gitea.example.com/swagger.v1.json"
         assert catalog.base_path == "/api/v1"
         assert catalog.server_version == "1.27.2"
