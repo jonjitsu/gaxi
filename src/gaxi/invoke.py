@@ -5,19 +5,25 @@ from __future__ import annotations
 import json
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from urllib.parse import urlencode, urljoin, urlsplit
 
 from gaxi.binding import bind
-from gaxi.classify import classify
+from gaxi.classify import Classification, classify
 from gaxi.download import save
-from gaxi.errors import GaxiError, UsageError
+from gaxi.errors import EXIT_FAILURE, GaxiError, UsageError
 from gaxi.http import FIRST_FAILURE, FIRST_REDIRECT, FIRST_SUCCESS, parse_int
 from gaxi.invocation import Fetched, Invocation, Outcome
 from gaxi.naming import command
 from gaxi.planner import Planner
 from gaxi.render import file_receipt
-from gaxi.results import dry_run_document, render_classification
+from gaxi.results import (
+    _error_message,
+    _reported,
+    dry_run_document,
+    render_batch_collection,
+    render_classification,
+)
 from gaxi.suggestions import build
 
 if TYPE_CHECKING:
@@ -26,6 +32,7 @@ if TYPE_CHECKING:
 
     from gaxi.binding import Binding
     from gaxi.capability import Capability
+    from gaxi.jsonshape import JsonValue
     from gaxi.session import Session
     from gaxi.transport import Response
 
@@ -78,6 +85,9 @@ def run_request(
     request = session.options.request
     if request.dry_run:
         return Outcome(dry_run_document(invocation))
+
+    if invocation.binding.is_batch():
+        return _run_batch(invocation)
 
     response = _exchange(invocation)
     if request.save and FIRST_SUCCESS <= response.status < FIRST_REDIRECT:
@@ -178,6 +188,66 @@ def _render_exchanged(invocation: Invocation, response: Response) -> Outcome:
     )
 
 
+def _run_batch(invocation: Invocation) -> Outcome:
+    """Execute one request per batch body and render a single collection result."""
+    bodies = cast("list[JsonValue]", invocation.binding.batch_bodies)
+    items: list[JsonValue] = []
+    any_failure = False
+    for body in bodies:
+        invocation.binding.body = body
+        try:
+            response = _exchange(invocation)
+            fetched = _classify_response(invocation, response)
+        except GaxiError as exc:
+            any_failure = True
+            items.append(_batch_execution_error_item(exc))
+            continue
+        if fetched.classification.kind == "error":
+            any_failure = True
+            items.append(_batch_error_item(fetched.classification))
+        else:
+            items.append(_batch_success_item(fetched.classification))
+    classification = Classification(
+        "collection",
+        payload=items,
+        total=len(items),
+    )
+    outcome = render_batch_collection(invocation, classification)
+    if any_failure:
+        outcome.exit_code = EXIT_FAILURE
+    return outcome
+
+
+def _batch_success_item(classification: Classification) -> JsonValue:
+    payload = classification.payload
+    if classification.kind == "object" and isinstance(payload, dict):
+        return payload
+    if classification.kind == "status":
+        return {"status": classification.status}
+    if classification.kind == "collection" and isinstance(payload, list):
+        return {"count": len(payload)}
+    return {"status": classification.status}
+
+
+def _batch_execution_error_item(exc: GaxiError) -> JsonValue:
+    item: dict[str, JsonValue] = {"error": exc.message}
+    if exc.status is not None:
+        item["status"] = exc.status
+    return item
+
+
+def _batch_error_item(classification: Classification) -> JsonValue:
+    item: dict[str, JsonValue] = {"status": classification.status}
+    payload = classification.payload
+    if isinstance(payload, dict):
+        for key in ("message", "error", "errors"):
+            if key in payload:
+                item[key] = payload[key]
+    if not _reported(item.get("error")):
+        item["error"] = _reported(item.get("message")) or _error_message(classification)
+    return item
+
+
 def _page(binding: Binding) -> int | None:
     return parse_int(dict(binding.query).get("page"))
 
@@ -211,6 +281,9 @@ def _check_execution_policy(inv: Invocation) -> None:
 
 def _check_transport_options(inv: Invocation) -> None:
     request = inv.request
+    if inv.binding.is_batch() and (request.save or request.raw):
+        msg = "--input-json batch requests cannot use --save or --raw"
+        raise UsageError(msg)
     if inv.props.response == "file" and not (request.save or request.raw):
         msg = f"{inv.cap.key} returns a binary response; use --save <path> or --raw"
         raise UsageError(

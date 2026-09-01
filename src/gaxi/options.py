@@ -28,6 +28,7 @@ class RequestOptions:
     allow_unknown: bool = False
     selector: str | None = None
     input_json: str | None = None
+    input_json_source: str | None = None
     fields: tuple[str, ...] | None = None
     full: bool = False
 
@@ -89,7 +90,8 @@ def build_options(values: Mapping[str, object]) -> Options:
         yes=bool(values.get("yes")),
         allow_unknown=bool(values.get("allow_unknown")),
         selector=_optional_str(values.get("selector")),
-        input_json=_coerce_input_json(values.get("input_json")),
+        input_json=_resolve_input_json(values.get("input_json")),
+        input_json_source=_input_json_source(values.get("input_json")),
         fields=_coerce_fields(values.get("fields")),
         full=bool(values.get("full")),
     )
@@ -166,7 +168,13 @@ def _optional_positive_int(value: object, name: str) -> int | None:
     return _positive_int(value, name)
 
 
-def _coerce_input_json(value: object) -> str | None:
+def _input_json_source(value: object) -> str | None:
+    if value is None:
+        return None
+    return str(value)
+
+
+def _resolve_input_json(value: object) -> str | None:
     if value is None:
         return None
     text = str(value)

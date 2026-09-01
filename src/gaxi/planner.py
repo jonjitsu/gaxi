@@ -7,11 +7,12 @@ still has to supply.
 
 from __future__ import annotations
 
+import json
 import re
 from typing import TYPE_CHECKING
 
 from gaxi.http import parse_int
-from gaxi.naming import command
+from gaxi.naming import command, shell_quote
 from gaxi.policy import IDENTIFIER_FIELDS
 from gaxi.suggestions import auth_add, capability, collect
 
@@ -80,7 +81,28 @@ class Planner:
     def retry(self, extra_options: Iterable[str] = ()) -> str:
         """The exact command that repeats this request with added options."""
         assignments = self._fixed_assignments(skip=())
-        return command(self.cap.method, self.path, assignments, list(extra_options))
+        options = list(extra_options)
+        if (input_json := self._input_json_option()) is not None:
+            options.insert(0, input_json)
+        return command(self.cap.method, self.path, assignments, options)
+
+    def _input_json_option(self) -> str | None:
+        """The ``--input-json`` flag when the batch payload is not in ``binding.body``."""
+        if not self.binding.is_batch():
+            return None
+        return f"--input-json {shell_quote(self._batch_input_json())}"
+
+    def _batch_input_json(self) -> str:
+        """The original batch payload reference, or a canonical JSON re-serialisation."""
+        if self.session is not None:
+            request = self.session.options.request
+            if (source := request.input_json_source) is not None:
+                if source.startswith("@") or source == "-":
+                    return source
+                return source
+            if request.input_json is not None:
+                return request.input_json
+        return json.dumps(self.binding.batch_bodies, separators=(",", ":"))
 
     # catalog-derived relationships ----------------------------------------
     def _child_of(
@@ -185,6 +207,19 @@ class Planner:
         """The same request with an explicit projection and truncation disabled."""
         options = [f"--fields {','.join(fields)}", "--full"] if fields else ["--full"]
         return command(self.cap.method, self.path, self._fixed_assignments(skip=()), options)
+
+    def detail_fields_full(
+        self,
+        payload: dict[str, JsonValue],
+        fields: Sequence[str],
+    ) -> str | None:
+        """A read-only detail fetch for truncated fields in one created entity."""
+        resolved = self._resolved_detail(payload)
+        if resolved is None:
+            return None
+        detail_path, _ = resolved
+        options = [f"--fields {','.join(fields)}", "--full"] if fields else ["--full"]
+        return command("get", detail_path, [], options)
 
     # composition -----------------------------------------------------------
     def for_collection(

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, urlencode
 
 from gaxi.errors import UsageError
-from gaxi.jsonbody import body_properties, body_schema, validate_json_body
+from gaxi.jsonbody import body_properties, body_schema, parse_input_json_bodies
 from gaxi.suggestions import build, capability
 
 if TYPE_CHECKING:
@@ -41,6 +41,11 @@ class Binding:
         self.files: list[tuple[str, str]] = []
         self.defaults: list[tuple[str, JsonValue]] = []
         self.body_is_raw = False
+        self.batch_bodies: list[JsonValue] | None = None
+
+    def is_batch(self) -> bool:
+        """Whether this invocation sends multiple JSON bodies."""
+        return self.batch_bodies is not None
 
     def query_string(self) -> str:
         """The bound query inputs, encoded."""
@@ -290,8 +295,12 @@ def _attach_body(
         if state.supplied:
             msg = "--input-json cannot be combined with body assignments"
             raise UsageError(msg, details=[("inputs", ", ".join(sorted(set(state.supplied))))])
-        binding.body = validate_json_body(cap, input_json)
-        binding.body_is_raw = True
+        parsed = parse_input_json_bodies(cap, input_json)
+        if parsed.is_batch:
+            binding.batch_bodies = parsed.bodies
+        else:
+            binding.body = parsed.bodies[0]
+            binding.body_is_raw = True
         return
     if state.scalars or state.arrays:
         binding.body = dict(state.scalars)
@@ -325,6 +334,12 @@ def _missing_body_inputs(
 
 def _supplied_body_names(binding: Binding, assigned: Sequence[str]) -> set[str]:
     """Which body properties the caller supplied, however they supplied them."""
+    if binding.batch_bodies is not None:
+        names: set[str] = set()
+        for body in binding.batch_bodies:
+            if isinstance(body, dict):
+                names.update(body)
+        return names
     if binding.body_is_raw and isinstance(binding.body, dict):
         return set(binding.body)
     return set(assigned)

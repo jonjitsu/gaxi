@@ -7,7 +7,7 @@ from pathlib import Path
 
 from gaxi import naming
 from gaxi.document import Aggregate, Document, Lines, Mapping, Node, Scalar, Table
-from gaxi.helpdoc import root_help
+from gaxi.helpdoc import COMMANDS, root_help
 
 HOME = "/home/tester"
 
@@ -79,6 +79,12 @@ class ExecutableNameTest(unittest.TestCase):
         assert naming.quote("") == '""'
         assert naming.quote('say "hi"') == '"say \\"hi\\""'
 
+    def test_shell_quote_disables_command_substitution(self) -> None:
+        assert naming.shell_quote("open") == "open"
+        assert naming.shell_quote("$(printf INJECTED)") == "'$(printf INJECTED)'"
+        assert naming.shell_quote("`date`") == "'`date`'"
+        assert naming.shell_quote("it's") == "'it'\\''s'"
+
     def test_a_command_carries_assignments_and_options(self) -> None:
         rendered = naming.command("get", "/x", [("state", "open")], ["--full"])
         assert rendered.endswith("get /x state=open --full")
@@ -91,3 +97,7 @@ class RootHelpTest(unittest.TestCase):
         commands = document.get("commands")
         assert isinstance(commands, Table)
         assert ["capabilities"] in [row[:1] for row in commands.rows]
+
+    def test_batch_capable_verbs_declare_collection_output(self) -> None:
+        for verb in ("post", "put", "patch", "delete"):
+            assert "collection" in COMMANDS[verb]["output"]

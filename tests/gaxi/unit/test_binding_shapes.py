@@ -73,7 +73,7 @@ class JsonBodyTest(unittest.TestCase):
 
     def test_a_non_object_body_is_rejected_when_properties_are_declared(self) -> None:
         with pytest.raises(UsageError) as caught:
-            validate_json_body(CREATE_ISSUE, "[1, 2]")
+            validate_json_body(CREATE_ISSUE, "1")
         assert "must be a JSON object" in caught.value.message
 
     def test_a_capability_without_a_body_schema_accepts_anything(self) -> None:

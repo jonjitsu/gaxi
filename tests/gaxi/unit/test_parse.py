@@ -73,7 +73,9 @@ class ParseTest(unittest.TestCase):
 
 class InputJsonTest(unittest.TestCase):
     def test_a_literal_value_is_used_as_written(self) -> None:
-        assert cli.parse(["--input-json", '{"a": 1}']).options.request.input_json == '{"a": 1}'
+        parsed = cli.parse(["--input-json", '{"a": 1}'])
+        assert parsed.options.request.input_json == '{"a": 1}'
+        assert parsed.options.request.input_json_source == '{"a": 1}'
 
     def test_a_dash_reads_standard_input(self) -> None:
         with unittest.mock.patch.object(sys, "stdin", io.StringIO('{"a": 1}')):
@@ -83,7 +85,9 @@ class InputJsonTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "body.json"
             path.write_text('{"a": 1}', encoding="utf-8")
-            assert cli.parse(["--input-json", f"@{path}"]).options.request.input_json == '{"a": 1}'
+            parsed = cli.parse(["--input-json", f"@{path}"])
+            assert parsed.options.request.input_json == '{"a": 1}'
+            assert parsed.options.request.input_json_source == f"@{path}"
 
     def test_an_unreadable_file_is_a_usage_failure(self) -> None:
         with pytest.raises(UsageError) as caught:

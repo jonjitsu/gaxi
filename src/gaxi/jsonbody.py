@@ -7,6 +7,7 @@ capability's declared body schema before anything is sent.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from gaxi.errors import UsageError
@@ -15,6 +16,14 @@ from gaxi.suggestions import build, capability
 if TYPE_CHECKING:
     from gaxi.capability import Capability
     from gaxi.jsonshape import JsonObject, JsonValue
+
+@dataclass(frozen=True)
+class InputJsonParse:
+    """Bodies parsed from ``--input-json`` and whether the input was batch-shaped."""
+
+    bodies: list[JsonValue]
+    is_batch: bool
+
 
 JSON_TYPES: dict[str, type | tuple[type, ...]] = {
     "string": str,
@@ -49,16 +58,94 @@ def validate_json_body(cap: Capability, text: str) -> JsonValue:
     except json.JSONDecodeError as exc:
         msg = f"--input-json is not valid JSON: {exc.msg}"
         raise UsageError(msg, details=[("position", str(exc.pos))]) from exc
+    return validate_json_value(cap, payload)
+
+
+def validate_json_value(
+    cap: Capability,
+    payload: JsonValue,
+    *,
+    index: int | None = None,
+) -> JsonValue:
+    """Validate one parsed JSON value against the capability's declared body schema."""
     properties = body_properties(cap)
     if not properties:
         return payload
     if not isinstance(payload, dict):
-        msg = "--input-json must be a JSON object for this capability"
+        label = f"--input-json element {index}" if index is not None else "--input-json"
+        msg = f"{label} must be a JSON object for this capability"
         raise UsageError(msg, details=[("capability", cap.key)])
     if body_schema(cap).get("additionalProperties") is not True:
         _reject_unknown(cap, payload, properties)
     _check_property_types(cap, payload, properties)
+    _check_required_properties(cap, payload, properties, index=index)
     return payload
+
+
+def parse_input_json_bodies(cap: Capability, text: str) -> InputJsonParse:
+    """Parse `--input-json` as one body or a batch of bodies.
+
+    A JSON array supplies multiple bodies and preserves batch shape even when it
+    contains one element. When the whole text is not valid JSON, each non-empty
+    line is parsed as NDJSON.
+    """
+    stripped = text.strip()
+    if not stripped:
+        msg = "--input-json is empty"
+        raise UsageError(msg)
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return InputJsonParse(_parse_ndjson_bodies(cap, text), is_batch=True)
+    if isinstance(payload, list):
+        return InputJsonParse(
+            [validate_json_value(cap, item, index=index) for index, item in enumerate(payload)],
+            is_batch=True,
+        )
+    return InputJsonParse([validate_json_value(cap, payload)], is_batch=False)
+
+
+def _parse_ndjson_bodies(cap: Capability, text: str) -> list[JsonValue]:
+    """Parse one JSON object per non-empty line."""
+    bodies: list[JsonValue] = []
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            payload = json.loads(stripped)
+        except json.JSONDecodeError as exc:
+            msg = f"--input-json line {line_number} is not valid JSON: {exc.msg}"
+            raise UsageError(
+                msg,
+                details=[("line", str(line_number)), ("position", str(exc.pos))],
+            ) from exc
+        bodies.append(validate_json_value(cap, payload, index=len(bodies)))
+    return bodies
+
+
+def _check_required_properties(
+    cap: Capability,
+    payload: JsonObject,
+    properties: JsonObject,
+    *,
+    index: int | None = None,
+) -> None:
+    """Refuse a body object that omits a required property."""
+    missing = [
+        name
+        for name in body_schema(cap).get("required") or []
+        if name in properties and name not in payload
+    ]
+    if not missing:
+        return
+    label = f"--input-json element {index}" if index is not None else "--input-json"
+    msg = f"{label} is missing required body property {missing[0]}"
+    raise UsageError(
+        msg,
+        details=[("missing", ", ".join(missing)), ("capability", cap.key)],
+        help_commands=build(capability(cap.key)),
+    )
 
 
 def _reject_unknown(cap: Capability, payload: JsonObject, properties: JsonObject) -> None:

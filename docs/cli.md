@@ -33,7 +33,7 @@ Output: collection, detail object, content, or file receipt
 | `--raw` | flag | false | Write the exact successful response body to stdout. |
 | `--save <path>` | path | none | Stream a response body to a file and print a receipt. |
 | `--overwrite` | flag | false | Allow --save to replace an existing file. |
-| `--input-json <json|@path|->` | json | none | Supply the complete JSON body. |
+| `--input-json <json|@path|->` | json | none | Supply one JSON body, a JSON array, or NDJSON (one object per line). |
 | `--as <method:path-template>` | key | none | Disambiguate capability resolution. |
 | `--operation <operationId>` | id | none | Disambiguate by Swagger operationId. |
 | `--yes` | flag | false | Acknowledge a known destructive mutation. |
@@ -55,7 +55,7 @@ Create through one advertised capability.
 gaxi post /path [name=value ...] [options]
 ```
 
-Output: detail object or status result
+Output: detail object, collection, or status result
 
 | option | value | default | description |
 |---|---|---|---|
@@ -64,7 +64,7 @@ Output: detail object or status result
 | `--raw` | flag | false | Write the exact successful response body to stdout. |
 | `--save <path>` | path | none | Stream a response body to a file and print a receipt. |
 | `--overwrite` | flag | false | Allow --save to replace an existing file. |
-| `--input-json <json|@path|->` | json | none | Supply the complete JSON body. |
+| `--input-json <json|@path|->` | json | none | Supply one JSON body, a JSON array, or NDJSON (one object per line). |
 | `--as <method:path-template>` | key | none | Disambiguate capability resolution. |
 | `--operation <operationId>` | id | none | Disambiguate by Swagger operationId. |
 | `--yes` | flag | false | Acknowledge a known destructive mutation. |
@@ -76,6 +76,7 @@ Examples:
 ```text
 gaxi post /repos/acme/widgets/issues title="Broken deployment"
 gaxi post /repos/acme/widgets/issues --input-json @issue.json
+gaxi post /repos/acme/widgets/issues --input-json @issues.json
 ```
 
 ## put
@@ -86,7 +87,7 @@ Replace through one advertised capability.
 gaxi put /path [name=value ...] [options]
 ```
 
-Output: detail object or status result
+Output: detail object, collection, or status result
 
 | option | value | default | description |
 |---|---|---|---|
@@ -95,7 +96,7 @@ Output: detail object or status result
 | `--raw` | flag | false | Write the exact successful response body to stdout. |
 | `--save <path>` | path | none | Stream a response body to a file and print a receipt. |
 | `--overwrite` | flag | false | Allow --save to replace an existing file. |
-| `--input-json <json|@path|->` | json | none | Supply the complete JSON body. |
+| `--input-json <json|@path|->` | json | none | Supply one JSON body, a JSON array, or NDJSON (one object per line). |
 | `--as <method:path-template>` | key | none | Disambiguate capability resolution. |
 | `--operation <operationId>` | id | none | Disambiguate by Swagger operationId. |
 | `--yes` | flag | false | Acknowledge a known destructive mutation. |
@@ -116,7 +117,7 @@ Update through one advertised capability.
 gaxi patch /path [name=value ...] [options]
 ```
 
-Output: detail object or status result
+Output: detail object, collection, or status result
 
 | option | value | default | description |
 |---|---|---|---|
@@ -125,7 +126,7 @@ Output: detail object or status result
 | `--raw` | flag | false | Write the exact successful response body to stdout. |
 | `--save <path>` | path | none | Stream a response body to a file and print a receipt. |
 | `--overwrite` | flag | false | Allow --save to replace an existing file. |
-| `--input-json <json|@path|->` | json | none | Supply the complete JSON body. |
+| `--input-json <json|@path|->` | json | none | Supply one JSON body, a JSON array, or NDJSON (one object per line). |
 | `--as <method:path-template>` | key | none | Disambiguate capability resolution. |
 | `--operation <operationId>` | id | none | Disambiguate by Swagger operationId. |
 | `--yes` | flag | false | Acknowledge a known destructive mutation. |
@@ -146,7 +147,7 @@ Delete through one advertised capability; always requires --yes.
 gaxi delete /path [name=value ...] --yes
 ```
 
-Output: status result
+Output: collection or status result
 
 | option | value | default | description |
 |---|---|---|---|
@@ -155,7 +156,7 @@ Output: status result
 | `--raw` | flag | false | Write the exact successful response body to stdout. |
 | `--save <path>` | path | none | Stream a response body to a file and print a receipt. |
 | `--overwrite` | flag | false | Allow --save to replace an existing file. |
-| `--input-json <json|@path|->` | json | none | Supply the complete JSON body. |
+| `--input-json <json|@path|->` | json | none | Supply one JSON body, a JSON array, or NDJSON (one object per line). |
 | `--as <method:path-template>` | key | none | Disambiguate capability resolution. |
 | `--operation <operationId>` | id | none | Disambiguate by Swagger operationId. |
 | `--yes` | flag | false | Acknowledge a known destructive mutation. |

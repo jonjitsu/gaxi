@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- `--input-json` now accepts a JSON array or NDJSON (one object per line) to
+  send one request per element against the same resolved capability. Batch output
+  is a collection result (`count: N of N total` plus a table). Partial failures
+  continue through the batch, include per-row error fields, and exit non-zero when
+  any element fails. Destructive batches still require `--yes` once for the
+  whole invocation; `--save` and `--raw` are rejected for batch requests.
+  Per-element transport and policy failures are recorded as row errors instead of
+  aborting the batch. `put`, `patch`, and `delete` help now declare collection
+  output alongside `post`. Batch truncation `help[]` now suggests read-only detail
+  fetches for truncated rows instead of replaying the mutation.
+- Batch confirmation retries now preserve the original ``--input-json`` payload
+  in ``help[]``, and mixed-result tables treat any row with an ``error`` field as
+  a failure even when the value is falsey. Batch retry help now single-quotes
+  JSON payloads so shell metacharacters are not expanded when copied, keeps
+  ``@file`` and ``-`` sources instead of inlining file contents, and collection
+  batch elements render a ``count`` column instead of blank default rows.
+- Mixed-result field promotion now retains ``error`` and ``status`` columns when
+  observed fallback already selected them, so all-error and 204/404 delete batches
+  no longer render zero-column tables.
 - Bridge options are now a frozen record grouped by consumer seam (`request`,
   `discovery`, `setup`, `output`, `auth`). Coercion and validation live in
   `gaxi.options.build_options` instead of `cli._options`. `--path` maps to

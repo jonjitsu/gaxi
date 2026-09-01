@@ -48,6 +48,14 @@ def quote(value: object) -> str:
     return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+def shell_quote(value: object) -> str:
+    """Quote one token so a copy-pasted command is safe in a POSIX shell."""
+    text = str(value)
+    if text and not any(ch.isspace() or ch in "'\"$`\\|&;<>()" for ch in text):
+        return text
+    return "'" + text.replace("'", "'\\''") + "'"
+
+
 def command(
     method: str,
     path: str,

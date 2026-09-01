@@ -9,7 +9,7 @@ from typing import Any
 
 import gaxi.__main__
 from gaxi import jsonshape, repo_context
-from gaxi.binding import _as_query_text
+from gaxi.binding import _as_query_text, bind
 from gaxi.capability import Capability, Param
 from gaxi.catalog import Catalog
 from gaxi.classify import Classification
@@ -19,6 +19,7 @@ from gaxi.discovery import _remote_origin, _sole_remote_origin
 from gaxi.document import Document
 from gaxi.encode import _yaml_lines, to_yaml
 from gaxi.jsonbody import _json_type_matches, body_properties
+from gaxi.options import Options, RequestOptions
 from gaxi.planner import (
     Planner,
     _identifier_from_payload,
@@ -34,6 +35,7 @@ from tests.gaxi.fixtures import DOCUMENT
 from tests.gaxi.support import json_response, run_cli
 
 CATALOG = Catalog.from_document(DOCUMENT, origin=support.ORIGIN)
+CREATE_ISSUE = CATALOG.by_key["post:/repos/{owner}/{repo}/issues"]
 
 
 class EntryPointTest(unittest.TestCase):
@@ -132,10 +134,108 @@ class PlannerEdgeTest(unittest.TestCase):
 
     def test_body_assignments_are_carried_into_a_retry(self) -> None:
         cap = CATALOG.by_key["post:/repos/{owner}/{repo}/issues"]
-        binding: Any = unittest.mock.Mock(query=[], body={"title": "Ship", "labels": [1]})
+        binding: Any = unittest.mock.Mock(
+            query=[],
+            body={"title": "Ship", "labels": [1]},
+            batch_bodies=None,
+        )
+        binding.is_batch.return_value = False
         planner = Planner(CATALOG, cap, "/repos/acme/widgets/issues", binding)
         assert "body:title=Ship" in planner.retry()
         assert "labels" not in planner.retry()
+
+    def test_batch_input_json_is_carried_into_a_retry(self) -> None:
+        payload = '[{"title": "a"}, {"title": "b"}]'
+        binding = bind(CREATE_ISSUE, [], input_json=payload)
+        session = support.make_session(
+            options=Options(request=RequestOptions(input_json=payload)),
+        )
+        planner = Planner(
+            CATALOG,
+            CREATE_ISSUE,
+            "/repos/acme/widgets/issues",
+            binding,
+            session,
+        )
+        assert (
+            planner.retry(["--yes"])
+            == "gaxi post /repos/acme/widgets/issues "
+            "--input-json '[{\"title\": \"a\"}, {\"title\": \"b\"}]' --yes"
+        )
+        assert (
+            planner.retry(["--allow-unknown"])
+            == "gaxi post /repos/acme/widgets/issues "
+            "--input-json '[{\"title\": \"a\"}, {\"title\": \"b\"}]' --allow-unknown"
+        )
+
+    def test_batch_input_json_serialises_bodies_without_a_session(self) -> None:
+        binding = bind(CREATE_ISSUE, [], input_json='[{"title": "a"}]')
+        planner = Planner(
+            CATALOG,
+            CREATE_ISSUE,
+            "/repos/acme/widgets/issues",
+            binding,
+        )
+        assert (
+            planner.retry()
+            == 'gaxi post /repos/acme/widgets/issues --input-json \'[{"title":"a"}]\''
+        )
+
+    def test_batch_input_json_falls_back_when_the_session_has_no_payload(self) -> None:
+        binding = bind(CREATE_ISSUE, [], input_json='[{"title": "a"}]')
+        session = support.make_session(options=Options(request=RequestOptions()))
+        planner = Planner(
+            CATALOG,
+            CREATE_ISSUE,
+            "/repos/acme/widgets/issues",
+            binding,
+            session,
+        )
+        assert (
+            planner.retry()
+            == 'gaxi post /repos/acme/widgets/issues --input-json \'[{"title":"a"}]\''
+        )
+
+    def test_shell_metacharacters_in_batch_json_are_single_quoted(self) -> None:
+        payload = '[{"title": "$(printf INJECTED)"}]'
+        binding = bind(CREATE_ISSUE, [], input_json=payload)
+        session = support.make_session(
+            options=Options(request=RequestOptions(input_json=payload, input_json_source=payload)),
+        )
+        planner = Planner(
+            CATALOG,
+            CREATE_ISSUE,
+            "/repos/acme/widgets/issues",
+            binding,
+            session,
+        )
+        assert (
+            planner.retry(["--yes"])
+            == "gaxi post /repos/acme/widgets/issues "
+            "--input-json '[{\"title\": \"$(printf INJECTED)\"}]' --yes"
+        )
+
+    def test_batch_input_json_from_a_file_keeps_the_source_reference(self) -> None:
+        binding = bind(CREATE_ISSUE, [], input_json='[{"title": "a"}]')
+        session = support.make_session(
+            options=Options(
+                request=RequestOptions(
+                    input_json='[{"title": "a"}]',
+                    input_json_source="@/tmp/bodies.jsonl",
+                ),
+            ),
+        )
+        planner = Planner(
+            CATALOG,
+            CREATE_ISSUE,
+            "/repos/acme/widgets/issues",
+            binding,
+            session,
+        )
+        assert (
+            planner.retry(["--yes"])
+            == "gaxi post /repos/acme/widgets/issues --input-json @/tmp/bodies.jsonl --yes"
+        )
 
     def test_related_suggestions_are_collected_for_rendering(self) -> None:
         planner = self.planner(
@@ -153,6 +253,20 @@ class PlannerEdgeTest(unittest.TestCase):
         suggestions = planner.for_detail(classification, effect="mutate")
         assert suggestions[0] == "gaxi get /repos/acme/widgets/issues/7"
         assert suggestions[1] == "gaxi get /repos/acme/widgets/issues/7/comments"
+
+    def test_detail_fields_full_builds_a_read_command(self) -> None:
+        cap = CATALOG.by_key["post:/repos/{owner}/{repo}/issues"]
+        binding: Any = unittest.mock.Mock(query=[], body={"title": "Ship"})
+        planner = Planner(CATALOG, cap, "/repos/acme/widgets/issues", binding)
+        assert planner.detail_fields_full({"number": 7}, ["title"]) == (
+            "gaxi get /repos/acme/widgets/issues/7 --fields title --full"
+        )
+
+    def test_detail_fields_full_returns_none_without_an_identifier(self) -> None:
+        cap = CATALOG.by_key["post:/repos/{owner}/{repo}/issues"]
+        binding: Any = unittest.mock.Mock(query=[], body={"title": "Ship"})
+        planner = Planner(CATALOG, cap, "/repos/acme/widgets/issues", binding)
+        assert planner.detail_fields_full({}, ["title"]) is None
 
     def test_detail_suggestion_uses_the_projected_identifier_placeholder(self) -> None:
         planner = self.planner(

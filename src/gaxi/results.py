@@ -11,19 +11,25 @@ from typing import TYPE_CHECKING
 from gaxi import projection, render
 from gaxi.document import Document, Lines, Mapping, Scalar, Table
 from gaxi.errors import EXIT_FAILURE, GaxiError
+from gaxi.fields import MAX_DECLARED_FIELDS
 from gaxi.fields import fields as resolve_fields
 from gaxi.invocation import Outcome
 from gaxi.naming import command
 from gaxi.planner import FORBIDDEN
-from gaxi.suggestions import build, prepend
+from gaxi.policy import fallback_projection, schema_field_names
+from gaxi.suggestions import build, collect, prepend
 
 if TYPE_CHECKING:
 
+    from collections.abc import Iterable, Sequence
+
     from gaxi.binding import Binding
+    from gaxi.capability import Capability
     from gaxi.classify import Classification
     from gaxi.invocation import Invocation
     from gaxi.jsonshape import JsonValue
     from gaxi.planner import Planner
+    from gaxi.policy import Properties
     from gaxi.transport import Response
 
 
@@ -57,6 +63,123 @@ def render_classification(
     if request.raw:
         return Outcome(raw=response.read_all())
     return Outcome(_document_for(inv, classification))
+
+
+def render_batch_collection(inv: Invocation, classification: Classification) -> Outcome:
+    """Shape a synthetic batch collection into the result the caller receives."""
+    request = inv.request
+    items = classification.payload or []
+    fields = _resolve_batch_fields(inv.cap, inv.props, items, request.fields)
+    if request.fields is None:
+        fields = _batch_result_fields(fields, items)
+    rows, truncations = projection.project_rows(items, fields, full=request.full)
+    help_commands = inv.planner.for_collection(
+        classification,
+        fields,
+        allow_policy_fallback=not request.fields,
+    )
+    if truncations:
+        help_commands = build(
+            *_batch_truncation_help(inv.planner, items, truncations),
+            *help_commands,
+        )
+    document = render.collection(
+        inv.props.entity or "results",
+        fields,
+        rows,
+        len(items),
+        total=classification.total,
+        truncations=truncations,
+        help_commands=help_commands,
+    )
+    return Outcome(document)
+
+
+def _batch_truncation_help(
+    planner: Planner,
+    items: Sequence[JsonValue],
+    truncations: Iterable[tuple[int, str, int]],
+) -> list[str]:
+    """Safe detail-retrieval suggestions for truncated batch result rows."""
+    by_row = _truncated_fields_by_row(truncations)
+    return collect(
+        *(
+            suggestion
+            for row_index, fields in sorted(by_row.items())
+            if (suggestion := _detail_fields_full_for_row(planner, items, row_index, fields))
+            is not None
+        ),
+    )
+
+
+def _truncated_fields_by_row(
+    truncations: Iterable[tuple[int, str, int]],
+) -> dict[int, list[str]]:
+    by_row: dict[int, list[str]] = {}
+    for row_index, field, _original in truncations:
+        row_fields = by_row.setdefault(row_index, [])
+        if field not in row_fields:
+            row_fields.append(field)
+    return by_row
+
+
+def _detail_fields_full_for_row(
+    planner: Planner,
+    items: Sequence[JsonValue],
+    row_index: int,
+    fields: Sequence[str],
+) -> str | None:
+    item_index = row_index - 1
+    if item_index < 0 or item_index >= len(items):
+        return None
+    item = items[item_index]
+    if not isinstance(item, dict):
+        return None
+    return planner.detail_fields_full(item, fields)
+
+
+def _resolve_batch_fields(
+    cap: Capability,
+    props: Properties,
+    items: Sequence[JsonValue],
+    selected: Sequence[str] | None,
+) -> list[str]:
+    """Choose batch row fields without applying collection-item schema to wrappers."""
+    if selected:
+        return resolve_fields(cap, props, items, selected)
+    if _batch_items_use_declared_fields(items, schema_field_names(cap.success_response())):
+        return resolve_fields(cap, props, items, None)
+    observed = projection.observed_fields(items)
+    if observed:
+        chosen = fallback_projection(observed) or observed[:MAX_DECLARED_FIELDS]
+        return list(chosen)
+    return resolve_fields(cap, props, items, None)
+
+
+def _batch_items_use_declared_fields(
+    items: Sequence[JsonValue],
+    declared: Sequence[str],
+) -> bool:
+    """Whether batch rows already expose the capability's declared response fields."""
+    if not declared:
+        return False
+    names = set(declared)
+    return any(
+        isinstance(item, dict) and names & set(item)
+        for item in items
+    )
+
+
+def _batch_result_fields(fields: list[str], items: Sequence[JsonValue]) -> list[str]:
+    """Prefer error columns when a batch mixed successes and failures."""
+    if not any(isinstance(item, dict) and "error" in item for item in items):
+        return fields
+    error_fields = ("error", "status")
+    leading = [name for name in error_fields if name in fields]
+    missing = [name for name in error_fields if name not in fields]
+    remaining = MAX_DECLARED_FIELDS - len(leading) - len(missing)
+    others = [name for name in fields if name not in error_fields][:remaining]
+    return leading + missing + others
 
 
 def _document_for(inv: Invocation, classification: Classification) -> Document:
@@ -241,9 +364,29 @@ def _input_rows(binding: Binding, defaults: set[str]) -> list[list[JsonValue]]:
     ]
     rows += [[name, "form", value, "assignment"] for name, value in binding.form]
     rows += [[name, "form", path, "file"] for name, path in binding.files]
+    rows += _body_input_rows(binding)
+    return rows
+
+
+def _body_input_rows(binding: Binding) -> list[list[JsonValue]]:
+    if binding.batch_bodies is not None:
+        return _batch_body_rows(binding.batch_bodies)
     if isinstance(binding.body, dict):
-        rows += [
+        return [
             [name, "body", projection.cell_value(value), "assignment"]
             for name, value in binding.body.items()
         ]
+    return []
+
+
+def _batch_body_rows(bodies: list[JsonValue]) -> list[list[JsonValue]]:
+    rows: list[list[JsonValue]] = []
+    for index, body in enumerate(bodies):
+        if isinstance(body, dict):
+            rows += [
+                [f"[{index}].{name}", "body", projection.cell_value(value), "input-json"]
+                for name, value in body.items()
+            ]
+        else:
+            rows.append([f"[{index}]", "body", projection.cell_value(body), "input-json"])
     return rows
