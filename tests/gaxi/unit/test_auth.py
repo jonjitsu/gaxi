@@ -77,6 +77,13 @@ class AuthTest(unittest.TestCase):
         assert "credentials[2]{origin,source,helper,insecure_transport}:" in out
         assert "secret-token" not in out
 
+    def test_no_help_omits_suggestions_from_auth_list(self) -> None:
+        self.config.set_server(support.ORIGIN, {"credential_helper": [str(self.helper)]})
+        code, out, _ = run_cli(["auth", "list", "--no-help"], config=self.config)
+        assert code == 0
+        assert "credentials[" in out
+        assert "help[" not in out
+
 
 if __name__ == "__main__":
     unittest.main()

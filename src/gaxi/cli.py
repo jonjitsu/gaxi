@@ -7,6 +7,7 @@ bridge's `--output` option.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import IO, TYPE_CHECKING
@@ -26,10 +27,10 @@ from gaxi.invocation import Outcome
 from gaxi.invoke import run_request
 from gaxi.naming import executable
 from gaxi.session import Options, Session
-from gaxi.suggestions import build, root_help, subcommand_help
+from gaxi.suggestions import build, configure, root_help, subcommand_help
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
     from gaxi.jsonshape import JsonObject
 
@@ -61,6 +62,7 @@ FLAG_OPTIONS = {
     "--refresh": "refresh",
     "--debug": "debug",
     "--token-stdin": "token_stdin",
+    "--no-help": "no_help",
 }
 OUTPUT_FORMATS = ("toon", "json", "yaml")
 
@@ -270,6 +272,31 @@ def dispatch(invocation: Invocation, session: Session) -> Outcome:
     return handler(invocation, session)
 
 
+def _configure_help_suppression(
+    argv: Sequence[str],
+    options: Options,
+    env: Mapping[str, str],
+) -> None:
+    configure(no_help=options.no_help or "--no-help" in argv, env=env)
+
+
+def _session_secrets(session: Session | None) -> list[str]:
+    return session.secrets if session is not None else []
+
+
+def _write_outcome(
+    stream: IO[str],
+    outcome: Outcome,
+    options: Options,
+    secrets: Sequence[str],
+) -> int:
+    if outcome.raw is not None:
+        _write_raw(stream, outcome.raw)
+        return outcome.exit_code
+    _write_document(stream, outcome.document or Document(), options, secrets)
+    return outcome.exit_code
+
+
 def main(
     argv: Sequence[str] | None = None,
     session: Session | None = None,
@@ -278,26 +305,26 @@ def main(
     """Entry point. Structured output always leaves on stdout."""
     argv = list(sys.argv[1:] if argv is None else argv)
     stream = stdout or sys.stdout
+    env: Mapping[str, str] = session.env if session is not None else os.environ
+    _configure_help_suppression(argv, Options(), env)
     secrets: list[str] = []
+    options = Options()
     try:
         invocation = parse(argv)
         session = session or Session(invocation.options)
         session.options = invocation.options
+        options = invocation.options
+        env = session.env
+        _configure_help_suppression(argv, options, env)
         outcome = dispatch(invocation, session)
         secrets = session.secrets
     except GaxiError as exc:
-        if session is not None:
-            secrets = session.secrets
-        _write_document(stream, _error_document(exc), Options(), secrets)
+        _write_document(stream, _error_document(exc), options, _session_secrets(session))
         return exc.exit_code
     except KeyboardInterrupt:
-        _write_document(stream, _error_document(GaxiError("interrupted")), Options(), [])
+        _write_document(stream, _error_document(GaxiError("interrupted")), options, secrets)
         return EXIT_FAILURE
-    if outcome.raw is not None:
-        _write_raw(stream, outcome.raw)
-        return outcome.exit_code
-    _write_document(stream, outcome.document or Document(), invocation.options, secrets)
-    return outcome.exit_code
+    return _write_outcome(stream, outcome, invocation.options, secrets)
 
 
 def _error_document(exc: GaxiError) -> Document:

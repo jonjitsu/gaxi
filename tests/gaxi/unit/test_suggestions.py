@@ -11,10 +11,13 @@ from gaxi.suggestions import (
     capabilities,
     capability,
     collect,
+    configure,
     context,
+    env_enabled,
     lines,
     prepend,
     root_help,
+    suppressed,
 )
 
 
@@ -58,3 +61,23 @@ class SuggestionsTest(unittest.TestCase):
             assert auth_add("https://gitea.example.com") == (
                 "bridge auth add https://gitea.example.com"
             )
+
+    def test_env_enabled_recognises_truthy_values(self) -> None:
+        assert env_enabled({"GAXI_NO_HELP": "1"})
+        assert env_enabled({"GAXI_NO_HELP": "true"})
+        assert env_enabled({"GAXI_NO_HELP": "YES"})
+        assert not env_enabled({"GAXI_NO_HELP": "0"})
+        assert not env_enabled({})
+
+    def test_configure_suppresses_lines_output(self) -> None:
+        configure(no_help=True)
+        assert suppressed()
+        assert lines("gaxi context") is None
+        configure(no_help=False)
+        assert lines("gaxi context") is not None
+
+    def test_configure_honours_the_environment(self) -> None:
+        configure(no_help=False, env={"GAXI_NO_HELP": "on"})
+        assert suppressed()
+        assert lines("gaxi context") is None
+        configure(no_help=False)

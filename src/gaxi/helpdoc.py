@@ -37,6 +37,9 @@ GLOBAL_OPTIONS: list[Option] = [
     ("--debug", "flag", "false",
      ("Write incidental diagnostics to stderr (one line per HTTP request, "
       "including description discovery).")),
+    ("--no-help", "flag", "false",
+     ("Omit help[] suggestions from structured output. Also enabled when "
+      "GAXI_NO_HELP is 1, true, yes, or on.")),
 ]
 
 REQUEST_OPTIONS: list[Option] = [
@@ -194,7 +197,11 @@ def verb_help(name: str) -> Document:
 
 
 def root_help() -> Document:
-    """The help document shown when no command is named."""
+    """The help document shown when no command is named.
+
+    ``--no-help`` does not apply here: ``--help`` is an explicit request for
+    usage text, including its own ``help[]`` examples.
+    """
     document = Document()
     mapping = Mapping()
     mapping.add("executable", Scalar(executable()))

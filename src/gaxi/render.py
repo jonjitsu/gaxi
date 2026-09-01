@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from gaxi.document import Aggregate, Document, Mapping, Scalar, Table
 from gaxi.suggestions import lines as suggestion_lines
+from gaxi.suggestions import suppressed
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -157,6 +158,8 @@ def error(
 
 
 def _add_help(document: Document, help_commands: Iterable[str]) -> Document:
+    if suppressed():
+        return document
     rendered = suggestion_lines(*help_commands)
     if rendered is not None:
         document.add("help", rendered)

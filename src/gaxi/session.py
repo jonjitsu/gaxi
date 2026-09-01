@@ -48,6 +48,7 @@ class Options:
         self.page: int | None = None
         self.helper: str | None = None
         self.token_stdin: bool = False
+        self.no_help: bool = False
         self.__dict__.update(values)
 
 

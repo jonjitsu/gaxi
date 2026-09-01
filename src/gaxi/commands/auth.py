@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from gaxi.config import normalize_origin
 from gaxi.credentials import run_helper
-from gaxi.document import Aggregate, Document, Lines, Table
+from gaxi.document import Aggregate, Document, Table
 from gaxi.errors import GaxiError, UsageError
 from gaxi.http import FIRST_SUCCESS
 from gaxi.naming import executable
@@ -23,6 +23,7 @@ from gaxi.suggestions import (
     build,
     context,
     example_auth_add,
+    lines,
     subcommand_help,
 )
 
@@ -81,7 +82,9 @@ def _list(session: Session) -> Document:
     document.add("count", Aggregate(len(rows), len(rows)))
     document.add("credentials",
                  Table(["origin", "source", "helper", "insecure_transport"], rows))
-    document.add("help", Lines(build(example_auth_add())))
+    rendered = lines(example_auth_add())
+    if rendered is not None:
+        document.add("help", rendered)
     return document
 
 

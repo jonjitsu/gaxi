@@ -5,6 +5,16 @@ from __future__ import annotations
 import pytest
 
 from gaxi.naming import DEFAULT_NAME
+from gaxi.suggestions import configure
+
+
+@pytest.fixture(autouse=True)
+def _reset_help_suppression(  # pyright: ignore[reportUnusedFunction]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep help[] suppression from leaking between tests."""
+    monkeypatch.delenv("GAXI_NO_HELP", raising=False)
+    configure(no_help=False)
 
 
 @pytest.fixture(autouse=True)

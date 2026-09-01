@@ -1,11 +1,17 @@
 """Golden output contracts for the command surface."""
 
+import io
 import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from gaxi import cli
+from gaxi.document import Document
+from gaxi.invocation import Outcome
 from gaxi.repo_context import RepositoryContext
+from gaxi.transport import Transport
 from tests.gaxi import support
 from tests.gaxi.support import json_response, response, run_cli
 
@@ -312,6 +318,74 @@ class FailureTest(unittest.TestCase):
         assert "widgets[1]{id,name,status" in out
 
 
+class NoHelpTest(unittest.TestCase):
+    def test_no_help_flag_omits_suggestions_from_success_output(self) -> None:
+        code, out, _ = run_cli(
+            ["get", "/repos/acme/widgets/pulls", "state=open", "--no-help"],
+            responses=[json_response(PULLS, headers={"X-Total-Count": "17"})],
+        )
+        assert code == 0
+        assert "pull_requests[2]" in out
+        assert "help[" not in out
+
+    def test_no_help_env_omits_suggestions_from_error_output(self) -> None:
+        code, out, _ = run_cli(
+            ["get", "/repos/acme/widgets/issues/999"],
+            responses=[json_response({"message": "issue does not exist"}, status=404)],
+            env={"GAXI_NO_HELP": "1"},
+        )
+        assert code == 1
+        assert "error:" in out
+        assert "help[" not in out
+
+    def test_no_help_does_not_remove_root_help_document_suggestions(self) -> None:
+        code, out, _ = run_cli(["--help", "--no-help"])
+        assert code == 0
+        assert "help[" in out
+
+    def test_no_help_flag_omits_suggestions_from_home_output(self) -> None:
+        code, out, _ = run_cli(
+            ["--no-help"],
+            responses=[json_response([], headers={"X-Total-Count": "12"}),
+                       json_response([], headers={"X-Total-Count": "3"})],
+        )
+        assert code == 0
+        assert "  repository: acme/widgets" in out
+        assert "help[" not in out
+
+    def test_error_output_honours_output_format(self) -> None:
+        code, out, _ = run_cli(
+            ["get", "/repos/acme/widgets/issues/999", "--output", "json"],
+            responses=[json_response({"message": "issue does not exist"}, status=404)],
+        )
+        assert code == 1
+        payload = json.loads(out)
+        assert payload["error"]["message"] == "issue does not exist"
+        assert payload["error"]["status"] == 404
+
+
+class TimeoutTest(unittest.TestCase):
+    def test_timeout_reaches_transport_when_main_builds_session(self) -> None:
+        timeouts: list[int] = []
+        real_init = Transport.__init__
+
+        def spy_init(transport: Transport, timeout: int = 30) -> None:
+            timeouts.append(timeout)
+            real_init(transport, timeout)
+
+        with (
+            patch.object(Transport, "__init__", spy_init),
+            patch.object(cli, "dispatch", return_value=Outcome(document=Document())),
+        ):
+            stream = io.StringIO()
+            code = cli.main(
+                ["get", "/repos/a/b/pulls", "--timeout", "5", "--server", support.ORIGIN],
+                stdout=stream,
+            )
+        assert code == 0
+        assert timeouts == [5]
+
+
 class SurfaceTest(unittest.TestCase):
     def test_home_shows_live_state_not_usage(self) -> None:
         code, out, _session = run_cli(
@@ -329,6 +403,7 @@ class SurfaceTest(unittest.TestCase):
         assert code == 0
         assert "  usage: gaxi get /path [name=value ...] [options]" in out
         assert "--allow-unknown" in out
+        assert "--no-help" in out
         assert "examples[2]:" in out
 
     def test_capabilities_defaults_to_a_bounded_list(self) -> None:

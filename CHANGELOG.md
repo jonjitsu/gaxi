@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add ``--no-help`` and ``GAXI_NO_HELP`` to omit ``help[]`` suggestions from
+  structured output without changing any other part of the result shape.
+  ``--help`` documents remain ungated because they are an explicit request for
+  usage text.
+- Structured error output now honours ``--output`` once parsing has succeeded,
+  so agents can request JSON or YAML for failures as well as successes.
 - Contextual disclosure now lives in `gaxi.suggestions`: one module owns ordering,
   de-duplication, the suggestion cap, and rendering through `naming.executable()`.
   Raising sites name an intent; `Planner` remains the request-shaped source and

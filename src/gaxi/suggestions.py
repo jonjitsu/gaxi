@@ -8,10 +8,36 @@ than capping locally.
 
 from __future__ import annotations
 
+import os
+from contextvars import ContextVar
+from typing import TYPE_CHECKING
+
 from gaxi.document import Lines
 from gaxi.naming import executable
 
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
 MAX_SUGGESTIONS = 3
+_NO_HELP_ENV = "GAXI_NO_HELP"
+_TRUTHY_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
+_suppressed: ContextVar[bool] = ContextVar("_suppressed", default=False)
+
+
+def env_enabled(env: Mapping[str, str] | None = None) -> bool:
+    """Return whether an environment mapping requests suppressed help."""
+    source = os.environ if env is None else env
+    return source.get(_NO_HELP_ENV, "").strip().lower() in _TRUTHY_ENV_VALUES
+
+
+def configure(*, no_help: bool = False, env: Mapping[str, str] | None = None) -> None:
+    """Apply the per-invocation help[] suppression switch."""
+    _suppressed.set(no_help or env_enabled(env))
+
+
+def suppressed() -> bool:
+    """Return whether contextual disclosure is currently suppressed."""
+    return _suppressed.get()
 
 
 def collect(*commands: str | None) -> list[str]:
@@ -38,6 +64,8 @@ def prepend(first: str | None, *rest: str | None) -> list[str]:
 
 def lines(*commands: str | None) -> Lines | None:
     """Render capped suggestions as document lines."""
+    if suppressed():
+        return None
     built = build(*commands)
     return Lines(built) if built else None
 

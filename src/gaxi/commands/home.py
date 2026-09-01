@@ -10,11 +10,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from gaxi.commands import context as context_command
-from gaxi.document import UNKNOWN, Document, Lines, Mapping, Scalar
+from gaxi.document import UNKNOWN, Document, Mapping, Scalar
 from gaxi.errors import GaxiError
 from gaxi.invoke import fetch
 from gaxi.naming import command, executable_path
-from gaxi.suggestions import auth_add, build, capabilities_placeholder, collect, context
+from gaxi.suggestions import auth_add, capabilities_placeholder, collect, context, lines
 
 if TYPE_CHECKING:
     from gaxi.classify import Classification
@@ -40,7 +40,9 @@ def run(session: Session) -> Document:
         mapping.add("open_pulls", Scalar(_open_total(session, full_name, "pulls")))
     mapping.add("capabilities", Scalar(len(session.catalog.available())))
     document.add("gaxi", mapping)
-    document.add("help", Lines(build(*_help(session, full_name))))
+    rendered = lines(*_help(session, full_name))
+    if rendered is not None:
+        document.add("help", rendered)
     return document
 
 
