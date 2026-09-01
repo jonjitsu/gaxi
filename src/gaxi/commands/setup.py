@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from gaxi.commands import skill as skill_command
 from gaxi.errors import GaxiError, UsageError
+from gaxi.http import FIRST_SUCCESS
 from gaxi.naming import executable
 from gaxi.render import status_result
 
@@ -22,7 +23,6 @@ if TYPE_CHECKING:
     from gaxi.jsonshape import JsonObject
     from gaxi.session import Session
 
-STATUS_OK = 200
 ACTIONS = ("skill", "hook")
 DEFAULT_SKILL_PATH = ".claude/skills/gitea-axi-bridge/SKILL.md"
 DEFAULT_HOOK_PATH = ".claude/settings.json"
@@ -59,7 +59,7 @@ def _write_skill(session: Session, root: Path) -> Document:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(skill_command.run(session), encoding="utf-8")
     return status_result(
-        STATUS_OK,
+        FIRST_SUCCESS,
         "written",
         extra=[("path", str(path)), ("kind", "agent skill")],
         help_commands=[f"{executable()} context"],
@@ -74,7 +74,7 @@ def _write_hook(session: Session, root: Path) -> Document:
     wanted = {"hooks": [{"type": "command", "command": f"{executable()} context"}]}
     if wanted in entries:
         return status_result(
-            STATUS_OK,
+            FIRST_SUCCESS,
             "unchanged",
             extra=[("path", str(path))],
             help_commands=[f"{executable()} context"],
@@ -85,7 +85,7 @@ def _write_hook(session: Session, root: Path) -> Document:
         json.dump(settings, handle, indent=2)
         handle.write("\n")
     return status_result(
-        STATUS_OK,
+        FIRST_SUCCESS,
         "installed",
         extra=[
             ("path", str(path)),

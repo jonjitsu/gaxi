@@ -11,13 +11,12 @@ import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from gaxi.http import FIRST_REDIRECT, FIRST_SUCCESS
+
 if TYPE_CHECKING:
     from gaxi.jsonshape import JsonObject, JsonValue
 
 LOCATION_NAMES = {"query": "query", "body": "body", "formData": "form"}
-FIRST_SUCCESS = 200
-FIRST_REDIRECT = 300
-LAST_REDIRECT = 400
 
 
 class UnsupportedError(Exception):
@@ -35,7 +34,6 @@ class Param:
     enum: list[JsonValue] | None = None
     items_type: str | None = None
     items_enum: list[JsonValue] | None = None
-    collection_format: str | None = None
     description: str = ""
     schema: JsonObject | None = None
     default: JsonValue = None
@@ -112,10 +110,6 @@ class Capability:
             if FIRST_SUCCESS <= status < FIRST_REDIRECT + 100:
                 return self.responses[status]
         return None
-
-    def declares(self, name: str) -> bool:
-        """Whether an input of this name is declared."""
-        return any(p.name == name for p in self.params)
 
 
 def _piece_pattern(piece: str) -> str:

@@ -34,7 +34,6 @@ class JsonTest(unittest.TestCase):
     def test_a_broken_json_body_degrades_to_text(self) -> None:
         result = classify(reply(b"{ not json", "application/json"))
         assert result.kind == "text"
-        assert result.decode_error == "response is not valid JSON"
         assert result.media_type == "application/json"
 
     def test_a_wrapped_collection_is_unwrapped_only_when_advertised(self) -> None:

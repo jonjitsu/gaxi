@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from gaxi.http import parse_int
 from gaxi.naming import command, executable
 from gaxi.policy import IDENTIFIER_FIELDS
 
@@ -147,8 +148,8 @@ class Planner:
 
     def next_page(self, classification: Classification) -> str | None:
         """A next-page command when metadata proves or a full page makes it plausible."""
-        page = _int(dict(self.binding.query).get("page"))
-        limit = _int(dict(self.binding.query).get("limit"))
+        page = parse_int(dict(self.binding.query).get("page"))
+        limit = parse_int(dict(self.binding.query).get("limit"))
         if page is None or limit is None:
             return None
         returned = len(classification.payload or [])
@@ -255,15 +256,6 @@ def _first(candidates: Iterable[str | None], limit: int) -> list[str]:
         if len(found) >= limit:
             break
     return found
-
-
-def _int(value: str | None) -> int | None:
-    if value is None:
-        return None
-    try:
-        return int(value)
-    except ValueError:
-        return None
 
 
 def _first_identifier_field(fields: Sequence[str]) -> str | None:

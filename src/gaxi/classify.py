@@ -11,6 +11,7 @@ import re
 from typing import TYPE_CHECKING
 
 from gaxi.document import UNKNOWN
+from gaxi.http import FIRST_FAILURE, FIRST_REDIRECT, FIRST_SUCCESS
 
 if TYPE_CHECKING:
     from gaxi.jsonshape import JsonValue
@@ -20,9 +21,6 @@ LINK_NEXT = re.compile(r'<([^>]+)>\s*;\s*rel="next"')
 JSON_TYPES = ("application/json", "text/json")
 TEXT_PREFIXES = ("text/",)
 TEXT_TYPES = ("application/xml", "application/x-yaml", "application/javascript")
-FIRST_SUCCESS = 200
-FIRST_REDIRECT = 300
-FIRST_FAILURE = 400
 
 
 class Classification:
@@ -38,7 +36,6 @@ class Classification:
         total: int | str | None = None,
         page: int | None = None,
         has_next: bool = False,
-        decode_error: str | None = None,
     ) -> None:
         self.kind = kind
         self.payload = payload
@@ -47,7 +44,6 @@ class Classification:
         self.total = total
         self.page = page
         self.has_next = has_next
-        self.decode_error = decode_error
 
 
 def _is_json(media_type: str, advertised_kind: str) -> bool:
@@ -117,7 +113,6 @@ def _classify_json(
             payload=_text(body, response.charset),
             media_type=media_type or "text/plain",
             status=status,
-            decode_error="response is not valid JSON",
         )
     total = _collection_total(_total(response.headers), page)
     has_next = bool(LINK_NEXT.search(response.headers.get("Link", "") or ""))

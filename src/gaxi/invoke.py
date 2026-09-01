@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlencode, urljoin, urlsplit
 
-from gaxi import projection
 from gaxi.binding import bind
 from gaxi.classify import classify
 from gaxi.errors import GaxiError, UsageError
+from gaxi.http import FIRST_FAILURE, FIRST_REDIRECT, FIRST_SUCCESS, parse_int
 from gaxi.invocation import Fetched, Invocation, Outcome
 from gaxi.naming import command
 from gaxi.planner import Planner
@@ -27,11 +27,7 @@ if TYPE_CHECKING:
     from gaxi.transport import Response
 
 MAX_REDIRECTS = 5
-TEXT_LIMIT = projection.LIMIT
 RETRYABLE = (502, 503, 504)
-FIRST_SUCCESS = 200
-FIRST_REDIRECT = 300
-FIRST_FAILURE = 400
 
 
 def _as_api_relative(raw_path: str) -> str:
@@ -163,13 +159,7 @@ def _render_exchanged(invocation: Invocation, response: Response) -> Outcome:
 
 
 def _page(binding: Binding) -> int | None:
-    raw = dict(binding.query).get("page")
-    if raw is None:
-        return None
-    try:
-        return int(raw)
-    except ValueError:
-        return None
+    return parse_int(dict(binding.query).get("page"))
 
 
 # execution policy ---------------------------------------------------------

@@ -15,6 +15,7 @@ from urllib.parse import urljoin
 from gaxi.catalog import Catalog
 from gaxi.config import cache_home, normalize_origin
 from gaxi.errors import GaxiError
+from gaxi.http import FIRST_SUCCESS, NOT_MODIFIED
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -30,8 +31,6 @@ DISCOVERY_PATH = "/api/swagger"
 FALLBACK_DOCUMENT = "/swagger.v1.json"
 DATA_SOURCE = re.compile(r"""data-source\s*=\s*["']([^"']+)["']""")
 DEFAULT_TTL = 3600
-STATUS_OK = 200
-STATUS_NOT_MODIFIED = 304
 DIGEST_LENGTH = 32
 
 
@@ -214,7 +213,7 @@ def load_catalog(
     requests += extra
     response = _send(transport, "GET", source_url, log_request=log_request)
     requests += 1
-    if response.status != STATUS_OK:
+    if response.status != FIRST_SUCCESS:
         msg = f"instance description request failed with status {response.status}"
         raise GaxiError(
             msg,
@@ -255,11 +254,11 @@ def _revalidate(
         headers=_conditional_headers(cached),
         log_request=log_request,
     )
-    if response.status == STATUS_NOT_MODIFIED:
+    if response.status == NOT_MODIFIED:
         cached["fetched"] = now
         _write_cache(path, cached)
         return Catalog.from_document(cached["document"], origin=origin)
-    if response.status == STATUS_OK:
+    if response.status == FIRST_SUCCESS:
         document = _parse_document(response, source_url)
         _store(path, origin, source_url, response, document, now)
         return Catalog.from_document(document, origin=origin)
@@ -312,7 +311,7 @@ def _discover_document_url(
     discovery_url = origin + DISCOVERY_PATH
     response = _send(transport, "GET", discovery_url, log_request=log_request)
     body = response.read_all().decode(response.charset, "replace")
-    if response.status == STATUS_OK:
+    if response.status == FIRST_SUCCESS:
         if response.media_type == "application/json":
             return discovery_url, 1
         found = DATA_SOURCE.search(body)

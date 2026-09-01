@@ -11,6 +11,7 @@ import re
 from typing import TYPE_CHECKING
 
 from gaxi.capability import Capability, Param, ResponseSpec, UnsupportedError
+from gaxi.http import FIRST_SUCCESS
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -24,7 +25,6 @@ HTTP_METHODS = ("get", "post", "put", "patch", "delete", "head", "options")
 MAX_REFERENCE_DEPTH = 16
 REDIRECT_STATUSES = range(300, 400)
 EMPTY_STATUSES = (204, 304)
-FIRST_SUCCESS = 200
 
 
 class Description:
@@ -101,7 +101,6 @@ def _param(description: Description, raw: JsonValue) -> Param:
         enum=raw.get("enum"),
         items_type=items_type,
         items_enum=items.get("enum"),
-        collection_format=raw.get("collectionFormat"),
         description=raw.get("description") or "",
         default=raw.get("default"),
     )

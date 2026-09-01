@@ -159,11 +159,6 @@ class CapabilityDetailTest(unittest.TestCase):
         assert code == 0
         assert "capabilities repos --page 2" in out
 
-    def test_declares_reports_whether_an_input_exists(self) -> None:
-        cap = CATALOG.by_key["get:/repos/{owner}/{repo}/pulls"]
-        assert cap.declares("state") is True
-        assert cap.declares("absent") is False
-
 
 class SetupTest(unittest.TestCase):
     def test_setup_requires_a_known_action(self) -> None:

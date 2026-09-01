@@ -14,6 +14,7 @@ from gaxi.config import normalize_origin
 from gaxi.credentials import run_helper
 from gaxi.document import Aggregate, Document, Lines, Table
 from gaxi.errors import GaxiError, UsageError
+from gaxi.http import FIRST_SUCCESS
 from gaxi.naming import executable
 from gaxi.render import status_result
 
@@ -23,7 +24,6 @@ if TYPE_CHECKING:
     from gaxi.jsonshape import JsonValue
     from gaxi.session import Session
 
-STATUS_OK = 200
 ACTIONS = ("list", "add", "remove", "allow-insecure")
 
 
@@ -116,7 +116,7 @@ def _add(session: Session, origin: str) -> Document:
     session.config.set_server(origin, {"credential_helper": helper})
     session.config.save()
     return status_result(
-        STATUS_OK,
+        FIRST_SUCCESS,
         "stored",
         extra=[("origin", origin), ("source", "credential-helper")],
         help_commands=[f"{executable()} --server {origin} context"],
@@ -127,7 +127,7 @@ def _remove(session: Session, origin: str) -> Document:
     helper = _helper_for(session, origin)
     run_helper(helper, "erase", origin)
     return status_result(
-        STATUS_OK,
+        FIRST_SUCCESS,
         "removed",
         extra=[("origin", origin)],
         help_commands=[f"{executable()} auth list"],
@@ -141,7 +141,7 @@ def _allow_insecure(session: Session, origin: str) -> Document:
     session.config.set_server(origin, {"insecure_transport": True})
     session.config.save()
     return status_result(
-        STATUS_OK,
+        FIRST_SUCCESS,
         "allowed",
         extra=[("origin", origin), ("insecure_transport", True)],
         help_commands=[f"{executable()} auth list"],

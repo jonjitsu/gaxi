@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- HTTP status thresholds and integer query parsing now live in `gaxi.http`
+  instead of being re-declared across classify, capability, discovery, invoke,
+  planner, swagger, and command modules. Removed unused surface that only tests
+  reached (`Capability.declares`, `Classification.decode_error`,
+  `Param.collection_format`, `invoke.TEXT_LIMIT`, `capability.LAST_REDIRECT`).
 - Collection `help[]` detail suggestions now name placeholders after the
   projected identifier column when that column is the detail route parameter or
   a declared synonym (for example `<number>` for `{index}`), instead of blindly
