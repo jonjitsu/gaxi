@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Stopped running every quality gate twice. `check` triggered on an unfiltered
+  `push` as well as `pull_request`, so each commit on a branch ran all three
+  jobs for the branch and then the same three for its pull request, and a
+  release tag re-ran the suite a third time on a commit already checked twice.
+  Measured on the 1.1.0 release commit, the six checks took 264s of wall clock
+  against 314s of job time — effectively serialised, half of it duplicated.
+  `push` is now limited to `master`, where there is no pull request to stand in
+  for it; branch work is gated by `pull_request` alone.
+
 ## 1.1.0
 
 - Mirrored releases to the public GitHub repository. Publishing a tag now pushes

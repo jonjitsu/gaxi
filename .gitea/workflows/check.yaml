@@ -1,7 +1,12 @@
 name: check
 
+# A branch push and its pull request are the same commit, so an unfiltered
+# `push` ran every job twice: once for the branch, once for the pull request,
+# and again for any tag. Branch work is gated by `pull_request`; `push` covers
+# master, where there is no pull request to stand in for it.
 on:
   push:
+    branches: [master]
   pull_request:
   workflow_dispatch:
 
