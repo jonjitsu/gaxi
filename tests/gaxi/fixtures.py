@@ -156,6 +156,8 @@ DOCUMENT = {
                     *PAGINATION,
                     {"name": "state", "in": "query", "type": "string",
                      "enum": ["open", "closed", "all"]},
+                    {"name": "type", "in": "query", "type": "string",
+                     "enum": ["issues", "pulls"]},
                 ]),
                 "responses": {"200": {"description": "IssueList",
                                       "schema": {"type": "array",

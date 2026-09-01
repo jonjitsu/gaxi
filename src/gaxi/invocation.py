@@ -12,10 +12,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from gaxi.binding import Binding
     from gaxi.capability import Capability
+    from gaxi.classify import Classification
     from gaxi.document import Document
     from gaxi.planner import Planner
     from gaxi.policy import Properties
     from gaxi.session import Options, Session
+    from gaxi.transport import Response
 
 
 class Outcome:
@@ -53,3 +55,12 @@ class Invocation:
     def request_line(self) -> str:
         """The request as it is reported in results and failures."""
         return f"{self.method.upper()} {self.path}"
+
+
+@dataclass(frozen=True)
+class Fetched:
+    """One resolved request, its final response, and how that response was classified."""
+
+    invocation: Invocation
+    classification: Classification
+    response: Response

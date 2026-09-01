@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Put a seam between the HTTP exchange and the rendered result. `invoke.fetch`
+  resolves, binds, sends, and classifies one request into a `Fetched` value;
+  `run_request` is now fetch-then-render. The home view uses three fetches
+  instead of hand-decoding responses, so JSON parsing and `X-Total-Count`
+  handling live in `classify` alone. The open-issues aggregate keeps the
+  `type=issues` qualifier so pull requests are not double-counted. When `/user`
+  returns JSON without a `login`, the home view reports the credential as
+  unverified.
 - Stopped running every quality gate twice. `check` triggered on an unfiltered
   `push` as well as `pull_request`, so each commit on a branch ran all three
   jobs for the branch and then the same three for its pull request, and a

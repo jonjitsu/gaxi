@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from gaxi import projection, render
-from gaxi.classify import classify
 from gaxi.document import Document, Lines, Mapping, Scalar, Table
 from gaxi.errors import EXIT_FAILURE, GaxiError
 from gaxi.invocation import Outcome
@@ -33,6 +32,7 @@ if TYPE_CHECKING:
     from gaxi.session import Options
     from gaxi.transport import Response
 
+
 @runtime_checkable
 class Digest(Protocol):
     """The part of a hash object this module relies on."""
@@ -52,14 +52,15 @@ MAX_HELP_COMMANDS = 3
 MAX_ERROR_ITEMS = 3
 MAX_DECLARED_FIELDS = 4
 
-def render_response(inv: Invocation, response: Response) -> Outcome:
-    """Classify one response and shape the result the caller receives."""
-    options = inv.options
-    if options.save and FIRST_SUCCESS <= response.status < FIRST_REDIRECT:
-        return Outcome(_save(inv, response))
-    page = _int(dict(inv.binding.query).get("page"))
-    classification = classify(response, inv.props.response or "unknown", page=page)
 
+def render_classification(
+    inv: Invocation,
+    classification: Classification,
+    *,
+    response: Response,
+) -> Outcome:
+    """Shape one classified response into the result the caller receives."""
+    options = inv.options
     if classification.kind == "error":
         return Outcome(
             render.error(
@@ -73,6 +74,11 @@ def render_response(inv: Invocation, response: Response) -> Outcome:
     if options.raw:
         return Outcome(raw=response.read_all())
     return Outcome(_document_for(inv, classification))
+
+
+def render_save(inv: Invocation, response: Response) -> Document:
+    """Save a successful response body to disk and return the receipt."""
+    return _save(inv, response)
 
 
 def _document_for(inv: Invocation, classification: Classification) -> Document:
@@ -274,17 +280,25 @@ def dry_run_document(inv: Invocation) -> Document:
     document.add("dry_run", _dry_run_mapping(inv))
 
     defaults = {name for name, _ in binding.defaults}
-    document.add("inputs", Table(
-        ["name", "location", "value", "source"],
-        _input_rows(binding, defaults),
-    ))
-    document.add("help", Lines([
-        command(
-            inv.method,
-            inv.path,
-            [(name, value) for name, value in binding.query if name not in defaults],
+    document.add(
+        "inputs",
+        Table(
+            ["name", "location", "value", "source"],
+            _input_rows(binding, defaults),
         ),
-    ]))
+    )
+    document.add(
+        "help",
+        Lines(
+            [
+                command(
+                    inv.method,
+                    inv.path,
+                    [(name, value) for name, value in binding.query if name not in defaults],
+                ),
+            ]
+        ),
+    )
     return document
 
 
@@ -334,12 +348,3 @@ def _input_rows(binding: Binding, defaults: set[str]) -> list[list[JsonValue]]:
             for name, value in binding.body.items()
         ]
     return rows
-
-
-def _int(value: str | None) -> int | None:
-    if value is None:
-        return None
-    try:
-        return int(value)
-    except ValueError:
-        return None

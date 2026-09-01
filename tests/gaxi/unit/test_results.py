@@ -6,7 +6,7 @@ import unittest.mock
 from pathlib import Path
 from typing import Any
 
-from gaxi import invoke, results
+from gaxi import invoke
 from gaxi.catalog import Catalog
 from gaxi.document import Document, Mapping, Scalar, Table
 from gaxi.encode import to_toon
@@ -105,13 +105,6 @@ class DryRunTest(unittest.TestCase):
         )
         assert code == 0
         assert "  repository:" not in out
-
-
-class PageParsingTest(unittest.TestCase):
-    def test_a_non_numeric_page_is_ignored(self) -> None:
-        assert results._int("abc") is None
-        assert results._int(None) is None
-        assert results._int("3") == 3
 
 
 class MultipartTest(unittest.TestCase):

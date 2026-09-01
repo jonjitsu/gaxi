@@ -7,19 +7,18 @@ of aggregate requests.
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING
 
 from gaxi.commands import context as context_command
-from gaxi.document import Document, Lines, Mapping, Scalar
+from gaxi.document import UNKNOWN, Document, Lines, Mapping, Scalar
 from gaxi.errors import GaxiError
+from gaxi.invoke import fetch
 from gaxi.naming import command, executable, executable_path
 
 if TYPE_CHECKING:
+    from gaxi.classify import Classification
     from gaxi.session import Session
 
-STATUS_OK = 200
-UNKNOWN = "unknown"
 SUMMARY = "Turn a Gitea instance's advertised capabilities into compact, safe requests."
 
 
@@ -49,47 +48,46 @@ def _identity(session: Session) -> str:
     if credential is None:
         return "anonymous"
     try:
-        response = session.send(
-            "GET",
-            session.instance.url("/user"),
-            headers=credential.headers(),
-        )
+        result = fetch(session, "get", "/user", [])
     except GaxiError:
         return f"credential from {credential.source}"
-    if response.status != STATUS_OK:
-        return f"credential from {credential.source} (unverified)"
-    try:
-        payload = json.loads(response.read_all().decode(response.charset, "replace"))
-    except ValueError:
-        return f"credential from {credential.source} (unverified)"
-    return payload.get("login") or f"credential from {credential.source}"
+    classification = result.classification
+    if classification.kind == "object" and isinstance(classification.payload, dict):
+        login = classification.payload.get("login")
+        if login:
+            return str(login)
+    return f"credential from {credential.source} (unverified)"
 
 
 def _open_total(session: Session, full_name: str, entity: str) -> int | str:
     """One bounded aggregate request; an unknown total is named, never guessed."""
-    query = "state=open&limit=1" + ("&type=issues" if entity == "issues" else "")
-    url = session.instance.url(f"/repos/{full_name}/{entity}", query)
-    headers = {"Accept": "application/json"}
-    credential = session.credential
-    if credential:
-        headers.update(credential.headers())
+    path = f"/repos/{full_name}/{entity}"
+    assignments = ["state=open", "limit=1"]
+    if entity == "issues":
+        assignments.append("type=issues")
     try:
-        response = session.send("GET", url, headers=headers)
+        result = fetch(
+            session,
+            "get",
+            path,
+            assignments,
+            apply_pagination=False,
+        )
     except GaxiError:
         return UNKNOWN
-    if response.status != STATUS_OK:
+    return _collection_count(result.classification)
+
+
+def _collection_count(classification: Classification) -> int | str:
+    if classification.kind != "collection":
         return UNKNOWN
-    total = response.headers.get("X-Total-Count")
-    if total is not None:
-        try:
-            return int(total)
-        except ValueError:
-            return UNKNOWN
-    try:
-        payload = json.loads(response.read_all().decode(response.charset, "replace"))
-    except ValueError:
+    total = classification.total
+    if isinstance(total, int):
+        return total
+    if total == UNKNOWN:
         return UNKNOWN
-    return len(payload) if isinstance(payload, list) else UNKNOWN
+    items = classification.payload
+    return len(items) if isinstance(items, list) else UNKNOWN
 
 
 def _help(session: Session, full_name: str) -> list[str]:

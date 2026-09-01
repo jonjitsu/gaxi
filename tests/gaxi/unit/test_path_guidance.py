@@ -1,12 +1,13 @@
 """What the bridge suggests when a caller names a path the wrong way."""
 
 import unittest
+import unittest.mock
 
 import pytest
 
 from gaxi.catalog import Catalog
 from gaxi.errors import EXIT_FAILURE, EXIT_USAGE, GaxiError
-from gaxi.invoke import _as_api_relative
+from gaxi.invoke import _as_api_relative, _suggested_path
 from gaxi.session import Options, Session
 from gaxi.transport import RecordingTransport
 from tests.gaxi import support
@@ -30,6 +31,17 @@ class ApiRelativeTest(unittest.TestCase):
         assert _as_api_relative("gitea.example.com/api/v1/user") == "/api/v1/user"
         assert _as_api_relative("gitea.example.com/x?q=1") == "/x?q=1"
 
+    def test_suggested_path_keeps_base_when_catalog_is_unreachable(self) -> None:
+        session = support.make_session()
+        with unittest.mock.patch.object(
+            type(session.catalog),
+            "base_path",
+            new_callable=unittest.mock.PropertyMock,
+            side_effect=GaxiError("unreachable"),
+        ):
+            suggested = _suggested_path(session, "https://gitea.example.com/api/v1/user")
+            assert suggested == "/api/v1/user"
+
     def test_a_path_that_merely_lost_its_slash_keeps_every_segment(self) -> None:
         assert _as_api_relative("repos/acme/widgets/pulls") == "/repos/acme/widgets/pulls"
         assert _as_api_relative("user") == "/user"
@@ -45,9 +57,13 @@ class UrlInsteadOfPathTest(unittest.TestCase):
 
     def test_the_base_path_stays_when_the_instance_cannot_be_reached(self) -> None:
         session = Session(Options(server=support.ORIGIN), transport=RecordingTransport())
-        code, out, _ = run_cli(
-            ["get", support.ORIGIN + "/api/v1/user"], session=session,
-        )
+        with unittest.mock.patch(
+            "gaxi.session.load_catalog",
+            side_effect=GaxiError("cannot reach instance"),
+        ):
+            code, out, _ = run_cli(
+                ["get", support.ORIGIN + "/api/v1/user"], session=session,
+            )
         assert code == EXIT_USAGE
         assert "- gaxi get /api/v1/user" in out
 

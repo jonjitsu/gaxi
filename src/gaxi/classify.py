@@ -137,7 +137,7 @@ def _classify_json(
     return Classification("object", payload=payload, media_type=media_type, status=status)
 
 
-def _collection_total(total: int | None, page: int | None) -> int | str | None:
+def _collection_total(total: int | str | None, page: int | None) -> int | str | None:
     if total is not None:
         return total
     return UNKNOWN if page is not None else None
@@ -151,14 +151,14 @@ def _unwrap(payload: JsonValue) -> list[JsonValue] | None:
     return None
 
 
-def _total(headers: Headers) -> int | None:
+def _total(headers: Headers) -> int | str | None:
     raw = headers.get("X-Total-Count")
     if raw is None:
         return None
     try:
         return int(raw)
-    except (TypeError, ValueError):
-        return None
+    except ValueError:
+        return UNKNOWN
 
 
 def _maybe_json(body: bytes, charset: str) -> JsonValue:

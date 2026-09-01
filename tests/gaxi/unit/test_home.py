@@ -51,6 +51,19 @@ class IdentityTest(unittest.TestCase):
         assert code == 0
         assert "identity: credential from environment (unverified)" in out
 
+    def test_an_identity_payload_without_login_is_not_trusted(self) -> None:
+        code, out, _ = run_cli(
+            [],
+            env=ENV,
+            responses=[
+                json_response({"id": 1}),
+                json_response([], headers={"X-Total-Count": "4"}),
+                json_response([], headers={"X-Total-Count": "2"}),
+            ],
+        )
+        assert code == 0
+        assert "identity: credential from environment (unverified)" in out
+
     def test_an_unreachable_identity_endpoint_still_names_the_source(self) -> None:
         code, out, _ = run_cli([], env=ENV, responses=[])
         assert code == 0
@@ -58,6 +71,23 @@ class IdentityTest(unittest.TestCase):
 
 
 class OpenTotalTest(unittest.TestCase):
+    def test_open_issues_request_includes_type_qualifier(self) -> None:
+        session = support.make_session(
+            options=Options(anonymous=True),
+            responses=[
+                json_response([], headers={"X-Total-Count": "13"}),
+                json_response([], headers={"X-Total-Count": "2"}),
+            ],
+        )
+        code, out, session = run_cli([], session=session)
+        assert code == 0
+        requests = support.recorded(session)
+        assert len(requests) == 2
+        assert "type=issues" in requests[0]["url"]
+        assert "type=issues" not in requests[1]["url"]
+        assert "  open_issues: 13" in out
+        assert "  open_pulls: 2" in out
+
     def test_a_missing_total_falls_back_to_the_returned_length(self) -> None:
         code, out, _ = run_cli(
             [],

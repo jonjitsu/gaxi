@@ -10,11 +10,12 @@ from urllib.parse import urlencode, urljoin, urlsplit
 
 from gaxi import projection
 from gaxi.binding import bind
+from gaxi.classify import classify
 from gaxi.errors import GaxiError, UsageError
-from gaxi.invocation import Invocation, Outcome
+from gaxi.invocation import Fetched, Invocation, Outcome
 from gaxi.naming import command
 from gaxi.planner import Planner
-from gaxi.results import dry_run_document, render_response
+from gaxi.results import dry_run_document, render_classification, render_save
 
 if TYPE_CHECKING:
     from collections.abc import Mapping as MappingABC
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
 MAX_REDIRECTS = 5
 TEXT_LIMIT = projection.LIMIT
 RETRYABLE = (502, 503, 504)
+FIRST_SUCCESS = 200
 FIRST_REDIRECT = 300
 FIRST_FAILURE = 400
 
@@ -60,7 +62,7 @@ def _suggested_path(session: Session, raw_path: str) -> str:
         base = session.catalog.base_path.rstrip("/")
     except GaxiError:
         return path
-    return path[len(base):] if base and path.startswith(base + "/") else path
+    return path[len(base) :] if base and path.startswith(base + "/") else path
 
 
 def run_request(
@@ -70,7 +72,50 @@ def run_request(
     assignments: Sequence[str],
 ) -> Outcome:
     """Resolve, validate, execute, classify, and render one request."""
+    invocation = _resolve_invocation(session, method, raw_path, assignments)
+    _check_execution_policy(invocation)
+    _check_transport_options(invocation)
+
+    if session.options.dry_run:
+        return Outcome(dry_run_document(invocation))
+
+    response = _exchange(invocation)
+    if session.options.save and FIRST_SUCCESS <= response.status < FIRST_REDIRECT:
+        return Outcome(render_save(invocation, response))
+    return _render_exchanged(invocation, response)
+
+
+def fetch(
+    session: Session,
+    method: str,
+    raw_path: str,
+    assignments: Sequence[str],
+    *,
+    apply_pagination: bool = True,
+) -> Fetched:
+    """Resolve, validate, exchange, and classify one request."""
+    invocation = _resolve_invocation(
+        session,
+        method,
+        raw_path,
+        assignments,
+        apply_pagination=apply_pagination,
+    )
+    _check_execution_policy(invocation)
+    _check_transport_options(invocation)
+    return _fetch_prepared(invocation)
+
+
+def _resolve_invocation(
+    session: Session,
+    method: str,
+    raw_path: str,
+    assignments: Sequence[str],
+    *,
+    apply_pagination: bool = True,
+) -> Invocation:
     options = session.options
+    method = method.lower()
     path, _, path_query = raw_path.partition("?")
     if not path.startswith("/"):
         msg = f"the API-relative path must begin with '/', got {raw_path!r}"
@@ -82,21 +127,53 @@ def run_request(
     catalog = session.catalog
     cap, _path_values = catalog.resolve(method, path, options.selector)
     props = session.policy.resolve(cap)
-    binding = bind(cap, assignments, path_query, options.input_json)
+    binding = bind(
+        cap,
+        assignments,
+        path_query,
+        options.input_json,
+        apply_pagination=apply_pagination,
+    )
     planner = Planner(catalog, cap, path, binding, options)
-    invocation = Invocation(session, cap, props, binding, planner, method, path)
+    return Invocation(session, cap, props, binding, planner, method, path)
 
-    _check_execution_policy(invocation)
-    _check_transport_options(invocation)
 
-    if options.dry_run:
-        return Outcome(dry_run_document(invocation))
-
+def _fetch_prepared(invocation: Invocation) -> Fetched:
     response = _exchange(invocation)
-    return render_response(invocation, response)
+    return _classify_response(invocation, response)
+
+
+def _classify_response(invocation: Invocation, response: Response) -> Fetched:
+    page = _page(invocation.binding)
+    classification = classify(
+        response,
+        invocation.props.response or "unknown",
+        page=page,
+    )
+    return Fetched(invocation, classification, response)
+
+
+def _render_exchanged(invocation: Invocation, response: Response) -> Outcome:
+    fetched = _classify_response(invocation, response)
+    return render_classification(
+        fetched.invocation,
+        fetched.classification,
+        response=fetched.response,
+    )
+
+
+def _page(binding: Binding) -> int | None:
+    raw = dict(binding.query).get("page")
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return None
 
 
 # execution policy ---------------------------------------------------------
+
 
 def _check_execution_policy(inv: Invocation) -> None:
     cap, props, options = inv.cap, inv.props, inv.options
@@ -137,6 +214,7 @@ def _check_transport_options(inv: Invocation) -> None:
 
 
 # request construction -----------------------------------------------------
+
 
 def _headers(session: Session, cap: Capability) -> dict[str, str]:
     headers = {"Accept": "application/json"}
