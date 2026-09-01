@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Mirrored releases to the public GitHub repository. Publishing a tag now pushes
+  the tagged commit and the tag to `jonjitsu/gaxi` and opens a GitHub release
+  whose body is the same changelog section Gitea publishes, read from the tagged
+  tree rather than from master. It is a separate workflow from `release-tag`
+  rather than a step inside it: the canonical tag already exists by then, so a
+  GitHub outage must not fail the release, and a retry of `release-tag` would
+  trip its refusal to retag. Nothing is force-pushed, so a diverged mirror fails
+  loudly instead of overwriting work.
+
 - Fixed the release workflows reading the version through a module path that no
   longer exists. They still ran `python -c 'import release; …'` after the
   mechanics moved into `automation/ci/`, and because a failed command

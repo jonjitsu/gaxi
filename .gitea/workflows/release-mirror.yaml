@@ -1,0 +1,91 @@
+name: release-mirror
+
+# Mirrors a published release to the public GitHub repository.
+#
+# Deliberately a separate workflow rather than a step inside `release-tag`: by
+# the time this runs the canonical tag already exists, so a GitHub outage must
+# not fail the release. Keeping it apart means it can be re-run on its own,
+# where a retry of `release-tag` would trip that workflow's refusal to retag.
+
+on:
+  push:
+    tags: ["*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: An existing tag to mirror
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  # Gitea reserves the `GITHUB_` prefix for the variables it injects itself and
+  # refuses to create a secret using it, so the credential for the other forge
+  # leads with `MIRROR_`.
+  MIRROR: github.com/jonjitsu/gaxi.git
+
+jobs:
+  mirror:
+    name: Mirror the release to GitHub
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # a shallow clone cannot be pushed to another remote
+
+      - name: Resolve the tag
+        id: release
+        run: |
+          set -euo pipefail
+          tag="${{ inputs.tag || github.ref_name }}"
+          if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "no such tag: $tag" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      # The notes are read from the tagged tree, so both forges publish the same
+      # changelog section rather than whatever master happens to say now.
+      - name: Check out the tagged release
+        run: git checkout --detach "${{ steps.release.outputs.tag }}"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: "3.13"
+      - name: Sync the development environment
+        run: uv sync --all-groups --frozen
+
+      - name: Push the release to GitHub
+        env:
+          TOKEN: ${{ secrets.MIRROR_GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git remote add mirror "https://x-access-token:$TOKEN@$MIRROR"
+          # The tagged commit, not local master, which may have moved on. No
+          # force: a mirror that has diverged should fail loudly here rather
+          # than have someone's work overwritten.
+          git push mirror "refs/tags/$TAG"
+          git push mirror "$TAG^{commit}:refs/heads/master"
+
+      - name: Publish the GitHub release
+        env:
+          TOKEN: ${{ secrets.MIRROR_GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          notes="$(uv run invoke release-notes)"
+          if [ -z "$notes" ]; then
+            echo "no changelog section for $TAG" >&2
+            exit 1
+          fi
+          jq -n --arg t "$TAG" --arg b "$notes" \
+            '{tag_name: $t, name: ("gaxi " + $t), body: $b}' | \
+          curl -sf -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -d @- "https://api.github.com/repos/jonjitsu/gaxi/releases" > /dev/null
+          echo "published gaxi $TAG on GitHub"

@@ -80,6 +80,12 @@ Never hand-edit a version. `pyproject.toml` is the single source, `uv.lock`
 records it, and the changelog heading names it; the pipeline moves all three
 together.
 
+Publishing the tag mirrors the release to the public GitHub repository, so the
+changelog section written here is what appears on both forges. The mirror is a
+separate workflow from the tagging one: by the time it runs the canonical tag
+exists, so a failure there is re-run on its own and never leaves a release half
+finished.
+
 ## Repository integration
 
 | Concern | Location |
