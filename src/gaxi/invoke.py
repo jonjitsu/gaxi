@@ -10,12 +10,14 @@ from urllib.parse import urlencode, urljoin, urlsplit
 
 from gaxi.binding import bind
 from gaxi.classify import classify
+from gaxi.download import save
 from gaxi.errors import GaxiError, UsageError
 from gaxi.http import FIRST_FAILURE, FIRST_REDIRECT, FIRST_SUCCESS, parse_int
 from gaxi.invocation import Fetched, Invocation, Outcome
 from gaxi.naming import command
 from gaxi.planner import Planner
-from gaxi.results import dry_run_document, render_classification, render_save
+from gaxi.render import file_receipt
+from gaxi.results import dry_run_document, render_classification
 
 if TYPE_CHECKING:
     from collections.abc import Mapping as MappingABC
@@ -77,7 +79,7 @@ def run_request(
 
     response = _exchange(invocation)
     if session.options.save and FIRST_SUCCESS <= response.status < FIRST_REDIRECT:
-        return Outcome(render_save(invocation, response))
+        return _save_outcome(invocation, response)
     return _render_exchanged(invocation, response)
 
 
@@ -147,6 +149,21 @@ def _classify_response(invocation: Invocation, response: Response) -> Fetched:
         page=page,
     )
     return Fetched(invocation, classification, response)
+
+
+def _save_outcome(invocation: Invocation, response: Response) -> Outcome:
+    path = invocation.options.save or ""
+    try:
+        receipt = save(response, path, overwrite=invocation.options.overwrite)
+    except GaxiError as exc:
+        if any(name == "reason" and value == "exists" for name, value in exc.details):
+            exc.help_commands = [
+                invocation.planner.retry([f"--save {path}", "--overwrite"]),
+            ]
+        raise
+    return Outcome(
+        file_receipt(receipt.path, receipt.size, receipt.media_type, receipt.sha256),
+    )
 
 
 def _render_exchanged(invocation: Invocation, response: Response) -> Outcome:

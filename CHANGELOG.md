@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Downloading a response body (`--save`) now lives in `gaxi.download` instead of
+  result shaping. Streaming, digesting, atomic replace, and the file receipt are
+  owned by `save(response, path, overwrite) -> Receipt`; `results` keeps only
+  classification-to-document work.
 - HTTP status thresholds and integer query parsing now live in `gaxi.http`
   instead of being re-declared across classify, capability, discovery, invoke,
   planner, swagger, and command modules. Removed unused surface that only tests

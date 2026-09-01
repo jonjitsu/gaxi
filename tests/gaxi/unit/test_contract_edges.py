@@ -1,6 +1,5 @@
 """The last contract edges: exhausted loops, absent metadata, and defaults."""
 
-import hashlib
 import json
 import tempfile
 import time
@@ -9,7 +8,6 @@ import unittest.mock
 from pathlib import Path
 from typing import Any
 
-from gaxi import results
 from gaxi.binding import bind
 from gaxi.capability import Capability, Param, ResponseSpec
 from gaxi.catalog import Catalog
@@ -98,17 +96,6 @@ class ProjectionEdgeTest(unittest.TestCase):
         code, out, _ = run_cli(["get", "/things"], session=session)
         assert code == 0
         assert "{name}" in out
-
-
-class DrainTest(unittest.TestCase):
-    def test_a_body_already_in_memory_is_written_in_one_go(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            destination = Path(directory) / "out.bin"
-            digest = hashlib.sha256()
-            size = results._drain(Response(200, [], body=b"payload"), destination, digest)
-            assert size == len(b"payload")
-            assert destination.read_bytes() == b"payload"
-            assert digest.hexdigest() == hashlib.sha256(b"payload").hexdigest()
 
 
 class JsonBodyEdgeTest(unittest.TestCase):

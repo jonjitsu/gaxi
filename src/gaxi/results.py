@@ -6,10 +6,7 @@ response looks like once it has come back.
 
 from __future__ import annotations
 
-import hashlib
-import uuid
-from pathlib import Path
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING
 
 from gaxi import projection, render
 from gaxi.document import Document, Lines, Mapping, Scalar, Table
@@ -18,7 +15,6 @@ from gaxi.invocation import Outcome
 from gaxi.naming import command
 from gaxi.planner import FORBIDDEN
 from gaxi.policy import fallback_projection, schema_field_names
-from gaxi.transport import CHUNK
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -32,19 +28,6 @@ if TYPE_CHECKING:
     from gaxi.policy import Properties
     from gaxi.session import Options
     from gaxi.transport import Response
-
-
-@runtime_checkable
-class Digest(Protocol):
-    """The part of a hash object this module relies on."""
-
-    def update(self, data: bytes, /) -> None:
-        """Add more bytes to the running digest."""
-        ...
-
-    def hexdigest(self) -> str:
-        """The digest so far, as hexadecimal."""
-        ...
 
 
 MAX_HELP_COMMANDS = 3
@@ -79,11 +62,6 @@ def render_classification(
     if options.raw:
         return Outcome(raw=response.read_all())
     return Outcome(_document_for(inv, classification))
-
-
-def render_save(inv: Invocation, response: Response) -> Document:
-    """Save a successful response body to disk and return the receipt."""
-    return _save(inv, response)
 
 
 def _document_for(inv: Invocation, classification: Classification) -> Document:
@@ -234,51 +212,6 @@ def _text_document(inv: Invocation, classification: Classification) -> Document:
         shortened,
         truncated=original is not None,
         help_commands=help_commands,
-    )
-
-
-def _drain(response: Response, destination: Path, digest: Digest) -> int:
-    """Write the whole response body to a file, hashing it on the way through."""
-    size = 0
-    with destination.open("wb") as handle:
-        if response.stream is None:
-            body = response.read_all()
-            digest.update(body)
-            handle.write(body)
-            return len(body)
-        while chunk := response.stream.read(CHUNK):
-            digest.update(chunk)
-            size += len(chunk)
-            handle.write(chunk)
-    return size
-
-
-def _save(inv: Invocation, response: Response) -> Document:
-    options = inv.options
-    requested = options.save or ""
-    destination = Path(requested).absolute()
-    if destination.exists() and not options.overwrite:
-        msg = f"{requested} already exists"
-        raise GaxiError(
-            msg,
-            details=[("path", requested)],
-            help_commands=[inv.planner.retry([f"--save {requested}", "--overwrite"])],
-        )
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.parent / f".gaxi-{uuid.uuid4().hex}.part"
-    digest = hashlib.sha256()
-    try:
-        size = _drain(response, temporary, digest)
-        temporary.replace(destination)
-    except OSError as exc:
-        temporary.unlink(missing_ok=True)
-        msg = f"cannot save response: {exc}"
-        raise GaxiError(msg, details=[("path", requested)]) from exc
-    return render.file_receipt(
-        requested,
-        size,
-        response.media_type or "application/octet-stream",
-        digest.hexdigest(),
     )
 
 
