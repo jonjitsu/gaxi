@@ -204,7 +204,7 @@ def _detail_document(inv: Invocation, classification: Classification) -> Documen
     items = [value] if isinstance(value, dict) else []
     fields = _fields_for(inv.cap, inv.props, items, options)
     pairs, truncations = projection.project_object(value, fields, full=options.full)
-    help_commands = inv.planner.for_detail()
+    help_commands = inv.planner.for_detail(classification, effect=inv.props.effect)
     if truncations:
         help_commands = _capped(help_commands, inv.planner.fields_full(fields))
     return render.detail(

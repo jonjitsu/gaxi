@@ -1,5 +1,6 @@
 """The remaining edges: fallbacks, overlays, and entry points."""
 
+import copy
 import subprocess
 import unittest
 import unittest.mock
@@ -10,13 +11,14 @@ from gaxi import jsonshape, repo_context
 from gaxi.binding import _as_query_text
 from gaxi.capability import Capability, Param
 from gaxi.catalog import Catalog
+from gaxi.classify import Classification
 from gaxi.config import Config
 from gaxi.credentials import CredentialResolver
 from gaxi.discovery import _remote_origin, _sole_remote_origin
 from gaxi.document import Document
 from gaxi.encode import _yaml_lines, to_yaml
 from gaxi.jsonbody import _json_type_matches, body_properties
-from gaxi.planner import Planner
+from gaxi.planner import Planner, _identifier_from_payload, _is_usable_identifier
 from gaxi.policy import Policy
 from gaxi.projection import validate_fields
 from gaxi.repo_context import RepositoryContext, parse_remote
@@ -134,6 +136,80 @@ class PlannerEdgeTest(unittest.TestCase):
             "get:/repos/{owner}/{repo}/issues/{index}", "/repos/acme/widgets/issues/1",
         )
         assert len(planner.related_suggestions(limit=1)) <= 1
+
+    def test_a_mutation_detail_suggests_the_created_entity(self) -> None:
+        cap = CATALOG.by_key["post:/repos/{owner}/{repo}/issues"]
+        binding: Any = unittest.mock.Mock(query=[], body={"title": "Ship"})
+        planner = Planner(CATALOG, cap, "/repos/acme/widgets/issues", binding, Options())
+        classification = Classification(
+            "object", payload={"id": 277, "number": 7, "title": "Ship"},
+        )
+        suggestions = planner.for_detail(classification, effect="mutate")
+        assert suggestions[0] == "gaxi get /repos/acme/widgets/issues/7"
+        assert suggestions[1] == "gaxi get /repos/acme/widgets/issues/7/comments"
+
+    def test_a_mutation_without_an_identifier_falls_back_to_collection_siblings(self) -> None:
+        raw: dict[str, Any] = copy.deepcopy(DOCUMENT)
+        issue_list = raw["paths"]["/repos/{owner}/{repo}/issues"]["get"]
+        raw["paths"]["/repos/{owner}/{repo}/issues/comments"] = {
+            "get": {
+                "operationId": "issueListRepoComments",
+                "parameters": issue_list["parameters"],
+                "responses": {"200": {"description": "CommentList", "schema": {"type": "array"}}},
+            },
+        }
+        raw["paths"]["/repos/{owner}/{repo}/issues/pinned"] = {
+            "get": {
+                "operationId": "issueListPinned",
+                "parameters": issue_list["parameters"],
+                "responses": {"200": {"description": "IssueList", "schema": {"type": "array"}}},
+            },
+        }
+        catalog = Catalog.from_document(raw, origin=support.ORIGIN)
+        cap = catalog.by_key["post:/repos/{owner}/{repo}/issues"]
+        binding: Any = unittest.mock.Mock(query=[], body={"title": "Ship"})
+        planner = Planner(catalog, cap, "/repos/acme/widgets/issues", binding, Options())
+        classification = Classification("object", payload={"title": "Ship"})
+        suggestions = planner.for_detail(classification, effect="mutate")
+        assert suggestions == [
+            "gaxi get /repos/acme/widgets/issues/comments",
+            "gaxi get /repos/acme/widgets/issues/pinned",
+        ]
+
+    def test_a_read_detail_still_suggests_sub_resources(self) -> None:
+        planner = self.planner(
+            "get:/repos/{owner}/{repo}/issues/{index}", "/repos/acme/widgets/issues/1",
+        )
+        suggestions = planner.for_detail(Classification("object", payload={"number": 1}),
+                                         effect="read")
+        assert suggestions[0] == "gaxi get /repos/acme/widgets/issues/1/comments"
+
+    def test_an_empty_string_identifier_is_skipped(self) -> None:
+        assert not _is_usable_identifier("")
+        assert _is_usable_identifier(0)
+        assert _identifier_from_payload({"index": "", "number": 3}, "index") == 3
+
+    def test_identifier_skips_duplicate_candidate_names(self) -> None:
+        assert _identifier_from_payload({"number": 5}, "index") == 5
+
+    def test_identifier_prefers_number_over_id_for_index_routes(self) -> None:
+        assert _identifier_from_payload({"id": 277, "number": 11}, "index") == 11
+
+    def test_identifier_still_uses_id_for_id_keyed_routes(self) -> None:
+        assert _identifier_from_payload({"id": 5, "number": 11}, "id") == 5
+
+    def test_for_detail_without_a_classification_uses_related_suggestions(self) -> None:
+        planner = self.planner(
+            "get:/repos/{owner}/{repo}/issues/{index}", "/repos/acme/widgets/issues/1",
+        )
+        assert planner.for_detail()[0] == "gaxi get /repos/acme/widgets/issues/1/comments"
+
+    def test_a_mutate_with_a_non_object_payload_falls_back(self) -> None:
+        cap = CATALOG.by_key["post:/repos/{owner}/{repo}/issues"]
+        binding: Any = unittest.mock.Mock(query=[], body={"title": "Ship"})
+        planner = Planner(CATALOG, cap, "/repos/acme/widgets/issues", binding, Options())
+        suggestions = planner.for_detail(Classification("object", payload=None), effect="mutate")
+        assert suggestions == []
 
 
 class OverlayTest(unittest.TestCase):

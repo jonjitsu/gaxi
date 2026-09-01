@@ -161,10 +161,11 @@ class MutationTest(unittest.TestCase):
     def test_known_mutation_executes_without_acknowledgement(self) -> None:
         code, out, session = run_cli(
             ["post", "/repos/acme/widgets/issues", "title=Broken deployment"],
-            responses=[json_response({"number": 42, "title": "Broken deployment",
+            responses=[json_response({"id": 999, "number": 42, "title": "Broken deployment",
                                       "state": "open", "updated_at": "t"}, status=201)])
         assert code == 0
         assert "issue:" in out
+        assert "- gaxi get /repos/acme/widgets/issues/42" in out
         assert json.loads(support.recorded(session)[0]["body"]) == {"title": "Broken deployment"}
 
     def test_dry_run_sends_nothing_and_shows_context(self) -> None:

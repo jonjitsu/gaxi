@@ -11,6 +11,7 @@ import re
 from typing import TYPE_CHECKING
 
 from gaxi.naming import command, executable
+from gaxi.policy import IDENTIFIER_FIELDS
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -29,6 +30,12 @@ NOT_FOUND = 404
 UNPROCESSABLE = 422
 
 PLACEHOLDER = re.compile(r"^\{([^{}]+)\}$")
+
+# Path-parameter names and their payload synonyms, tried before the generic fallback.
+_PARAM_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "index": ("index", "number"),
+    "number": ("number", "index"),
+}
 
 
 class Planner:
@@ -95,14 +102,30 @@ class Planner:
 
     def related_suggestions(self, limit: int = 2) -> list[str]:
         """Concrete sub-resources of a detail route, such as its comments."""
+        return self._related_at(self.cap.path, self.path, limit)
+
+    def _related_at(self, template: str, path: str, limit: int = 2) -> list[str]:
         found: list[str] = []
-        for _cap, rest in self._child_of(self.cap.path):
+        for _cap, rest in self._child_of(template):
             if PLACEHOLDER.match(rest[0]):
                 continue
-            found.append(command("get", f"{self.path.rstrip('/')}/{rest[0]}"))
+            found.append(command("get", f"{path.rstrip('/')}/{rest[0]}"))
             if len(found) >= limit:
                 break
         return found
+
+    def _resolved_detail(self, payload: dict[str, JsonValue]) -> tuple[str, str] | None:
+        """The concrete detail path and catalog template for a created entity."""
+        for cap, rest in self._child_of(self.cap.path):
+            match = PLACEHOLDER.match(rest[0])
+            if not match:
+                continue
+            value = _identifier_from_payload(payload, match.group(1))
+            if value is None:
+                continue
+            detail_path = f"{self.path.rstrip('/')}/{value}"
+            return detail_path, cap.path
+        return None
 
     def next_page(self, classification: Classification) -> str | None:
         """A next-page command when metadata proves or a full page makes it plausible."""
@@ -159,8 +182,23 @@ class Planner:
         """Next actions when a collection came back empty."""
         return _first([self.alternative_filter(), self.parent_collection()], 2)
 
-    def for_detail(self) -> list[str]:
+    def for_detail(
+        self,
+        classification: Classification | None = None,
+        *,
+        effect: str | None = None,
+    ) -> list[str]:
         """Next actions for a detail result."""
+        payload = classification.payload if classification else None
+        if effect == "mutate" and isinstance(payload, dict):
+            resolved = self._resolved_detail(payload)
+            if resolved is not None:
+                detail_path, detail_template = resolved
+                suggestions = [
+                    command("get", detail_path),
+                    *self._related_at(detail_template, detail_path),
+                ]
+                return _first(suggestions, 2)
         return _first(self.related_suggestions(), 2)
 
     def for_error(self, status: int) -> list[str]:
@@ -191,3 +229,24 @@ def _int(value: str | None) -> int | None:
         return int(value)
     except ValueError:
         return None
+
+
+def _identifier_from_payload(payload: dict[str, JsonValue], param: str) -> JsonValue | None:
+    """One externally usable identifier from a mutation response payload."""
+    synonyms = _PARAM_SYNONYMS.get(param, (param,))
+    candidates = (*synonyms, *IDENTIFIER_FIELDS)
+    seen: set[str] = set()
+    for name in candidates:
+        if name in seen:
+            continue
+        seen.add(name)
+        value = payload.get(name)
+        if _is_usable_identifier(value):
+            return value
+    return None
+
+
+def _is_usable_identifier(value: JsonValue) -> bool:
+    if isinstance(value, str):
+        return bool(value)
+    return isinstance(value, int) and not isinstance(value, bool)

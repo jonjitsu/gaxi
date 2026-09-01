@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- After a mutation that returns an object, `help[]` now points at the created
+  entity's detail route with the identifier taken from the response payload,
+  instead of unrelated sibling collection routes. When the payload carries no
+  usable identifier, suggestions fall back to the previous collection-sibling
+  behaviour.
 - Put a seam between the HTTP exchange and the rendered result. `invoke.fetch`
   resolves, binds, sends, and classifies one request into a `Fetched` value;
   `run_request` is now fetch-then-render. The home view uses three fetches
