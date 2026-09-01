@@ -15,6 +15,7 @@ from gaxi.errors import GaxiError, UsageError
 from gaxi.http import FIRST_SUCCESS
 from gaxi.naming import executable
 from gaxi.render import status_result
+from gaxi.suggestions import build, context, setup_skill_overwrite
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -54,7 +55,7 @@ def _write_skill(session: Session, root: Path) -> Document:
         raise GaxiError(
             msg,
             details=[("path", str(path))],
-            help_commands=[f"{executable()} setup skill --overwrite"],
+            help_commands=build(setup_skill_overwrite()),
         )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(skill_command.run(session), encoding="utf-8")
@@ -62,7 +63,7 @@ def _write_skill(session: Session, root: Path) -> Document:
         FIRST_SUCCESS,
         "written",
         extra=[("path", str(path)), ("kind", "agent skill")],
-        help_commands=[f"{executable()} context"],
+        help_commands=build(context()),
     )
 
 
@@ -77,7 +78,7 @@ def _write_hook(session: Session, root: Path) -> Document:
             FIRST_SUCCESS,
             "unchanged",
             extra=[("path", str(path))],
-            help_commands=[f"{executable()} context"],
+            help_commands=build(context()),
         )
     entries.append(wanted)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -92,7 +93,7 @@ def _write_hook(session: Session, root: Path) -> Document:
             ("hook", "SessionStart"),
             ("command", f"{executable()} context"),
         ],
-        help_commands=[f"{executable()} context"],
+        help_commands=build(context()),
     )
 
 

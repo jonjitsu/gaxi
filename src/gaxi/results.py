@@ -15,9 +15,9 @@ from gaxi.fields import fields as resolve_fields
 from gaxi.invocation import Outcome
 from gaxi.naming import command
 from gaxi.planner import FORBIDDEN
+from gaxi.suggestions import build, prepend
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
 
     from gaxi.binding import Binding
     from gaxi.classify import Classification
@@ -27,7 +27,6 @@ if TYPE_CHECKING:
     from gaxi.transport import Response
 
 
-MAX_HELP_COMMANDS = 3
 MAX_ERROR_ITEMS = 3
 
 
@@ -71,7 +70,7 @@ def _document_for(inv: Invocation, classification: Classification) -> Document:
             status=classification.status,
             request=inv.request_line,
             details=[("media_type", classification.media_type)],
-            help_commands=[inv.planner.retry(["--save ./download.bin"])],
+            help_commands=build(inv.planner.retry(["--save ./download.bin"])),
         )
     if kind == "text":
         return _text_document(inv, classification)
@@ -86,8 +85,7 @@ def _document_for(inv: Invocation, classification: Classification) -> Document:
 
 
 def _status_help(planner: Planner) -> list[str]:
-    parent = planner.parent_collection()
-    return [parent] if parent else []
+    return build(planner.parent_collection())
 
 
 def _reported(value: JsonValue) -> str:
@@ -107,10 +105,6 @@ def _error_message(classification: Classification) -> str:
             if reported:
                 return reported
     return f"request failed with status {classification.status}"
-
-
-def _capped(help_commands: Sequence[str], first: str) -> list[str]:
-    return [first, *help_commands][:MAX_HELP_COMMANDS]
 
 
 def _collection_document(inv: Invocation, classification: Classification) -> Document:
@@ -133,7 +127,7 @@ def _collection_document(inv: Invocation, classification: Classification) -> Doc
         allow_policy_fallback=not inv.options.fields,
     )
     if truncations:
-        help_commands = _capped(help_commands, inv.planner.fields_full(fields))
+        help_commands = prepend(inv.planner.fields_full(fields), *help_commands)
     return render.collection(
         inv.props.entity or "results",
         fields,
@@ -154,7 +148,7 @@ def _detail_document(inv: Invocation, classification: Classification) -> Documen
     pairs, truncations = projection.project_object(value, fields, full=options.full)
     help_commands = inv.planner.for_detail(classification, effect=inv.props.effect)
     if truncations:
-        help_commands = _capped(help_commands, inv.planner.fields_full(fields))
+        help_commands = prepend(inv.planner.fields_full(fields), *help_commands)
     return render.detail(
         inv.props.entity_singular or inv.props.entity or "result",
         pairs,
@@ -166,7 +160,9 @@ def _detail_document(inv: Invocation, classification: Classification) -> Documen
 def _text_document(inv: Invocation, classification: Classification) -> Document:
     text = classification.payload or ""
     shortened, original = projection.truncate(text, full=inv.options.full)
-    help_commands = [inv.planner.retry(["--raw"])] if original is not None else []
+    help_commands = build(
+        inv.planner.retry(["--raw"]) if original is not None else None,
+    )
     return render.content(
         classification.media_type,
         len(text.encode("utf-8")),

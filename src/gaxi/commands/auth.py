@@ -17,6 +17,14 @@ from gaxi.errors import GaxiError, UsageError
 from gaxi.http import FIRST_SUCCESS
 from gaxi.naming import executable
 from gaxi.render import status_result
+from gaxi.suggestions import (
+    auth_add_stdin,
+    auth_list,
+    build,
+    context,
+    example_auth_add,
+    subcommand_help,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -35,7 +43,7 @@ def run(session: Session, positionals: Sequence[str]) -> Document:
         raise UsageError(
             msg,
             details=[("known", ", ".join(ACTIONS))],
-            help_commands=[f"{executable()} auth --help"],
+            help_commands=build(subcommand_help("auth")),
         )
     arguments = positionals[1:]
     if action == "list":
@@ -73,9 +81,7 @@ def _list(session: Session) -> Document:
     document.add("count", Aggregate(len(rows), len(rows)))
     document.add("credentials",
                  Table(["origin", "source", "helper", "insecure_transport"], rows))
-    document.add("help", Lines([
-        f"{executable()} auth add https://gitea.example.com --token-stdin",
-    ]))
+    document.add("help", Lines(build(example_auth_add())))
     return document
 
 
@@ -91,9 +97,9 @@ def _helper_for(session: Session, origin: str) -> list[str]:
         msg,
         details=[("origin", origin),
                  ("reason", "plaintext tokens are never stored in configuration")],
-        help_commands=[
+        help_commands=build(
             f'{executable()} auth add {origin} --token-stdin --helper "<command>"',
-        ],
+        ),
     )
 
 
@@ -104,7 +110,7 @@ def _add(session: Session, origin: str) -> Document:
             msg,
             details=[("origin", origin),
                      ("reason", "tokens are never accepted as command-line arguments")],
-            help_commands=[f"{executable()} auth add {origin} --token-stdin"],
+            help_commands=build(auth_add_stdin(origin)),
         )
     helper = _helper_for(session, origin)
     token = sys.stdin.read().strip()
@@ -119,7 +125,7 @@ def _add(session: Session, origin: str) -> Document:
         FIRST_SUCCESS,
         "stored",
         extra=[("origin", origin), ("source", "credential-helper")],
-        help_commands=[f"{executable()} --server {origin} context"],
+        help_commands=build(context(server=origin)),
     )
 
 
@@ -130,7 +136,7 @@ def _remove(session: Session, origin: str) -> Document:
         FIRST_SUCCESS,
         "removed",
         extra=[("origin", origin)],
-        help_commands=[f"{executable()} auth list"],
+        help_commands=build(auth_list()),
     )
 
 
@@ -144,5 +150,5 @@ def _allow_insecure(session: Session, origin: str) -> Document:
         FIRST_SUCCESS,
         "allowed",
         extra=[("origin", origin), ("insecure_transport", True)],
-        help_commands=[f"{executable()} auth list"],
+        help_commands=build(auth_list()),
     )

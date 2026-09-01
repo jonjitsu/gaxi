@@ -26,6 +26,7 @@ from gaxi.invocation import Outcome
 from gaxi.invoke import run_request
 from gaxi.naming import executable
 from gaxi.session import Options, Session
+from gaxi.suggestions import build, root_help, subcommand_help
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -104,7 +105,7 @@ def parse(argv: Sequence[str]) -> Invocation:
             raise UsageError(
                 msg,
                 details=[("option", argument)],
-                help_commands=[f"{executable()} --help"],
+                help_commands=build(root_help()),
             )
         else:
             positionals.append(argument)
@@ -133,7 +134,7 @@ def _consume_option(argument: str, argv: Sequence[str], index: int, values: Json
         raise UsageError(
             msg,
             details=[("option", name)],
-            help_commands=[f"{executable()} --help"],
+            help_commands=build(root_help()),
         )
     if separator:
         values[VALUE_OPTIONS[name]] = inline
@@ -198,7 +199,7 @@ def _run_verb(invocation: Invocation, session: Session, name: str) -> Outcome:
         raise UsageError(
             msg,
             details=[("usage", f"{executable()} {name} /path name=value")],
-            help_commands=[f"{executable()} {name} --help"],
+            help_commands=build(subcommand_help(name)),
         )
     path, *assignments = invocation.positionals
     return run_request(session, name, path, assignments)
@@ -262,7 +263,7 @@ def dispatch(invocation: Invocation, session: Session) -> Outcome:
         raise UsageError(
             msg,
             details=[("command", name), ("known", ", ".join(COMMANDS))],
-            help_commands=[f"{executable()} --help"],
+            help_commands=build(root_help()),
         )
     if invocation.wants_help:
         return Outcome(helpdoc.command_help(name))

@@ -15,6 +15,7 @@ from urllib.parse import parse_qsl, urlencode
 
 from gaxi.errors import UsageError
 from gaxi.jsonbody import body_properties, body_schema, validate_json_body
+from gaxi.suggestions import build, capability
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -178,7 +179,7 @@ def _resolve_location(cap: Capability, location: str | None, name: str) -> str:
         raise UsageError(
             msg,
             details=[("input", name), ("capability", cap.key)],
-            help_commands=[f"gaxi capability {cap.key}"],
+            help_commands=build(capability(cap.key)),
         )
     return location
 
@@ -190,7 +191,7 @@ def _infer_location(cap: Capability, name: str) -> str:
         raise UsageError(
             msg,
             details=[("input", name), ("capability", cap.key)],
-            help_commands=[f"gaxi capability {cap.key}"],
+            help_commands=build(capability(cap.key)),
         )
     if len(candidates) > 1:
         qualified = ", ".join(f"{QUALIFIERS_INVERSE[c]}:{name}=" for c in candidates)
@@ -350,7 +351,7 @@ def _check_required(cap: Capability, binding: Binding, supplied_body_names: Sequ
         raise UsageError(
             msg,
             details=[("capability", cap.key), ("missing", ", ".join(missing))],
-            help_commands=[f"gaxi capability {cap.key}"],
+            help_commands=build(capability(cap.key)),
         )
 
 

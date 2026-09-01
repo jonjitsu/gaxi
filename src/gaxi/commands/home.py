@@ -13,7 +13,8 @@ from gaxi.commands import context as context_command
 from gaxi.document import UNKNOWN, Document, Lines, Mapping, Scalar
 from gaxi.errors import GaxiError
 from gaxi.invoke import fetch
-from gaxi.naming import command, executable, executable_path
+from gaxi.naming import command, executable_path
+from gaxi.suggestions import auth_add, build, capabilities_placeholder, collect, context
 
 if TYPE_CHECKING:
     from gaxi.classify import Classification
@@ -39,7 +40,7 @@ def run(session: Session) -> Document:
         mapping.add("open_pulls", Scalar(_open_total(session, full_name, "pulls")))
     mapping.add("capabilities", Scalar(len(session.catalog.available())))
     document.add("gaxi", mapping)
-    document.add("help", Lines(_help(session, full_name)))
+    document.add("help", Lines(build(*_help(session, full_name))))
     return document
 
 
@@ -92,13 +93,13 @@ def _collection_count(classification: Classification) -> int | str:
 
 def _help(session: Session, full_name: str) -> list[str]:
     if full_name:
-        return [
+        return collect(
             command("get", f"/repos/{full_name}/issues", [("state", "open")]),
             command("get", f"/repos/{full_name}/pulls", [("state", "open")]),
-            f"{executable()} capabilities <search terms>",
-        ]
-    return [
-        f"{executable()} capabilities <search terms>",
-        f"{executable()} context",
-        f"{executable()} auth add {session.instance.origin}",
-    ]
+            capabilities_placeholder(),
+        )
+    return collect(
+        capabilities_placeholder(),
+        context(),
+        auth_add(session.instance.origin),
+    )

@@ -5,8 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from gaxi.document import Aggregate, Document, Lines, Mapping, Scalar, Table
-from gaxi.naming import command, executable
+from gaxi.naming import command
 from gaxi.policy import schema_field_names
+from gaxi.suggestions import build, capabilities, capability, collect, lines
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -18,7 +19,6 @@ if TYPE_CHECKING:
 
 DEFAULT_LIMIT = 20
 SUMMARY_LIMIT = 160
-MAX_HELP = 3
 MAX_PROJECTION_HINT = 4
 POLICY_PROPERTIES = ("effect", "confirmation", "retry", "response", "entity", "projection")
 
@@ -45,7 +45,8 @@ def run(session: Session, terms: Sequence[str]) -> Document:
         for cap in window
     ]
     document.add("capabilities", Table(["method", "path", "summary", "effect"], rows))
-    document.add("help", Lines(_list_help(window, matched, terms, page, limit)))
+    rendered = lines(*_list_help(window, matched, terms, page, limit))
+    _attach_help(document, rendered)
     return document
 
 
@@ -61,15 +62,14 @@ def _list_help(
     page: int,
     limit: int,
 ) -> list[str]:
-    suggestions = []
+    suggestions: list[str | None] = []
     if window:
-        suggestions.append(f"{executable()} capability {window[0].key}")
+        suggestions.append(capability(window[0].key))
     if page * limit < len(matched):
-        term_text = (" " + " ".join(terms)) if terms else ""
-        suggestions.append(f"{executable()} capabilities{term_text} --page {page + 1}")
+        suggestions.append(capabilities(*terms, page=page + 1))
     elif not terms:
-        suggestions.append(f"{executable()} capabilities issue")
-    return suggestions[:MAX_HELP]
+        suggestions.append(capabilities("issue"))
+    return build(*suggestions)
 
 
 def detail(session: Session, selector: str) -> Document:
@@ -91,7 +91,7 @@ def detail(session: Session, selector: str) -> Document:
         mapping.add("available", Scalar(value=False))
         mapping.add("reason", Scalar(cap.unsupported))
         document.add("capability", mapping)
-        document.add("help", Lines([f"{executable()} capabilities"]))
+        _attach_help(document, lines(capabilities()))
         return document
     mapping.add("effect", Scalar(props.effect))
     mapping.add("confirmation", Scalar(props.confirmation))
@@ -115,8 +115,13 @@ def detail(session: Session, selector: str) -> Document:
          for name in POLICY_PROPERTIES
          if getattr(props, name) is not None],
     ))
-    document.add("help", Lines(_capability_help(cap, props)))
+    _attach_help(document, lines(*_capability_help(cap, props)))
     return document
+
+
+def _attach_help(document: Document, rendered: Lines | None) -> None:
+    if rendered is not None:
+        document.add("help", rendered)
 
 
 def _property_value(value: JsonValue) -> JsonValue:
@@ -159,4 +164,4 @@ def _capability_help(cap: Capability, props: Properties) -> list[str]:
     if fields:
         projection = ",".join(fields[:MAX_PROJECTION_HINT])
         suggestions.append(command(cap.method, example, options=[f"--fields {projection}"]))
-    return suggestions[:2]
+    return collect(*suggestions)

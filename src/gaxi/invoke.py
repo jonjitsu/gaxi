@@ -18,6 +18,7 @@ from gaxi.naming import command
 from gaxi.planner import Planner
 from gaxi.render import file_receipt
 from gaxi.results import dry_run_document, render_classification
+from gaxi.suggestions import build
 
 if TYPE_CHECKING:
     from collections.abc import Mapping as MappingABC
@@ -120,7 +121,7 @@ def _resolve_invocation(
         raise UsageError(
             msg,
             details=[("path", raw_path), ("expected", "a path relative to the instance")],
-            help_commands=[command(method, _suggested_path(session, raw_path))],
+            help_commands=build(command(method, _suggested_path(session, raw_path))),
         )
     catalog = session.catalog
     cap, _path_values = catalog.resolve(method, path, options.selector)
@@ -157,9 +158,9 @@ def _save_outcome(invocation: Invocation, response: Response) -> Outcome:
         receipt = save(response, path, overwrite=invocation.options.overwrite)
     except GaxiError as exc:
         if any(name == "reason" and value == "exists" for name, value in exc.details):
-            exc.help_commands = [
+            exc.help_commands = build(
                 invocation.planner.retry([f"--save {path}", "--overwrite"]),
-            ]
+            )
         raise
     return Outcome(
         file_receipt(receipt.path, receipt.size, receipt.media_type, receipt.sha256),
@@ -191,7 +192,7 @@ def _check_execution_policy(inv: Invocation) -> None:
         raise GaxiError(
             msg,
             details=[("capability", cap.key), ("confirmation", "required")],
-            help_commands=[inv.planner.retry(["--yes"])],
+            help_commands=build(inv.planner.retry(["--yes"])),
         )
     if props.confirmation == "unknown" and not options.allow_unknown:
         msg = f"{cap.key} has unknown mutation semantics and requires --allow-unknown"
@@ -202,7 +203,7 @@ def _check_execution_policy(inv: Invocation) -> None:
                 ("confirmation", "unknown"),
                 ("policy_source", props.sources.get("confirmation", "fallback")),
             ],
-            help_commands=[inv.planner.retry(["--allow-unknown"])],
+            help_commands=build(inv.planner.retry(["--allow-unknown"])),
         )
 
 
@@ -213,7 +214,7 @@ def _check_transport_options(inv: Invocation) -> None:
         raise UsageError(
             msg,
             details=[("capability", inv.cap.key), ("response", "file")],
-            help_commands=[inv.planner.retry(["--save ./download.bin"])],
+            help_commands=build(inv.planner.retry(["--save ./download.bin"])),
         )
     if options.save and options.raw:
         msg = "--save and --raw are mutually exclusive"

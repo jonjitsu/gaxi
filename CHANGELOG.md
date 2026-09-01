@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Contextual disclosure now lives in `gaxi.suggestions`: one module owns ordering,
+  de-duplication, the suggestion cap, and rendering through `naming.executable()`.
+  Raising sites name an intent; `Planner` remains the request-shaped source and
+  feeds `build()` rather than capping locally. Three separate caps in `render`,
+  `results`, and `commands/capabilities` collapse to `MAX_SUGGESTIONS`.
 - Field-selection precedence now lives in `gaxi.fields.fields` instead of being
   split across `results`, `policy`, and `projection`. Result shaping calls one
   function; `projection` keeps truncation and dotted-path resolution only.

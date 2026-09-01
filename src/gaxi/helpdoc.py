@@ -12,6 +12,7 @@ import gaxi
 from gaxi.document import Document, Lines, Mapping, Scalar, Table
 from gaxi.naming import executable
 from gaxi.policy_data import BUNDLE_VERSION
+from gaxi.suggestions import build, capabilities_example, context
 
 type Option = tuple[str, str, str, str]
 
@@ -206,10 +207,7 @@ def root_help() -> Document:
         [[name, format_help(spec["usage"]), spec["summary"]] for name, spec in COMMANDS.items()],
     ))
     document.add("options", _options_table(GLOBAL_OPTIONS))
-    document.add("help", Lines([
-        f"{executable()} capabilities issue",
-        f"{executable()} context",
-    ]))
+    document.add("help", Lines(build(capabilities_example(), context())))
     return document
 
 

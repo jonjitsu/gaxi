@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Self
 
 from gaxi.errors import GaxiError, UsageError
-from gaxi.naming import command, executable
+from gaxi.naming import command
+from gaxi.suggestions import build, capabilities, disambiguate
 from gaxi.swagger import compile_description
 
 if TYPE_CHECKING:
@@ -73,7 +74,7 @@ class Catalog:
             raise GaxiError(
                 msg,
                 details=[("selector", selector)],
-                help_commands=[f"gaxi capabilities {hint}"],
+                help_commands=build(capabilities(hint)),
             )
         return cap
 
@@ -102,11 +103,11 @@ class Catalog:
             raise GaxiError(
                 msg,
                 details=details,
-                help_commands=[
-                    *([] if without_base is None else [command(method, without_base)]),
-                    f"{executable()} capabilities " + _search_hint(path),
-                    f"{executable()} capabilities",
-                ],
+                help_commands=build(
+                    None if without_base is None else command(method, without_base),
+                    capabilities(_search_hint(path)),
+                    capabilities(),
+                ),
             )
         if len(matches) > 1:
             return _most_specific(method, path, matches)
@@ -160,10 +161,9 @@ def _most_specific(method: str, path: str, matches: Sequence[Match]) -> Match:
     raise GaxiError(
         msg,
         details=[("request", f"{method.upper()} {path}")],
-        help_commands=[
-            f"gaxi {method} {path} --as {key}"
-            for key in keys[:MAX_DISAMBIGUATION_HINTS]
-        ],
+        help_commands=build(
+            *(disambiguate(method, path, key) for key in keys[:MAX_DISAMBIGUATION_HINTS]),
+        ),
     )
 
 
@@ -173,7 +173,7 @@ def _checked(cap: Capability, values: dict[str, str]) -> Match:
         raise GaxiError(
             msg,
             details=[("capability", cap.key), ("reason", cap.unsupported or "")],
-            help_commands=["gaxi capabilities"],
+            help_commands=build(capabilities()),
         )
     return cap, values
 

@@ -29,6 +29,7 @@ from gaxi.policy import Policy
 from gaxi.projection import validate_fields
 from gaxi.repo_context import RepositoryContext, parse_remote
 from gaxi.session import Options
+from gaxi.suggestions import build
 from tests.gaxi import support
 from tests.gaxi.fixtures import DOCUMENT
 from tests.gaxi.support import json_response, run_cli
@@ -137,11 +138,11 @@ class PlannerEdgeTest(unittest.TestCase):
         assert "body:title=Ship" in planner.retry()
         assert "labels" not in planner.retry()
 
-    def test_related_suggestions_stop_at_the_limit(self) -> None:
+    def test_related_suggestions_are_collected_for_rendering(self) -> None:
         planner = self.planner(
             "get:/repos/{owner}/{repo}/issues/{index}", "/repos/acme/widgets/issues/1",
         )
-        assert len(planner.related_suggestions(limit=1)) <= 1
+        assert build(*planner.related_suggestions())
 
     def test_a_mutation_detail_suggests_the_created_entity(self) -> None:
         cap = CATALOG.by_key["post:/repos/{owner}/{repo}/issues"]

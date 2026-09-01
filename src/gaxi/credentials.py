@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from gaxi.config import normalize_origin
 from gaxi.errors import GaxiError
+from gaxi.suggestions import anonymous_get, auth_add, auth_allow_insecure, build, context
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -51,7 +52,7 @@ class CredentialResolver:
             raise GaxiError(
                 msg,
                 details=[("expected", "GITEA_SERVER=<origin> GITEA_TOKEN=<secret>")],
-                help_commands=["gaxi context"],
+                help_commands=build(context()),
             )
         return normalize_origin(server) if server else None
 
@@ -71,10 +72,7 @@ class CredentialResolver:
             raise GaxiError(
                 msg,
                 details=[("credential_origin", environment), ("request_origin", origin)],
-                help_commands=[
-                    f"gaxi auth add {origin}",
-                    "gaxi get / --anonymous",
-                ],
+                help_commands=build(auth_add(origin), anonymous_get()),
             )
         return None
 
@@ -95,7 +93,7 @@ class CredentialResolver:
             raise GaxiError(
                 msg,
                 details=[("origin", origin)],
-                help_commands=[f"gaxi auth allow-insecure {origin}"],
+                help_commands=build(auth_allow_insecure(origin)),
             )
 
 

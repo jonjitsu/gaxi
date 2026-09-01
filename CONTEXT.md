@@ -40,6 +40,10 @@ _Avoid_: Capability, command
 The ordered subset of response fields presented for an entity. Semantic policy may choose a projection, but projected field names remain faithful to the instance response.
 _Avoid_: View model, renamed schema
 
+**Suggestion**:
+The executable next action offered after a result, carrying forward fixed context and using placeholders only for values the caller must still supply.
+_Avoid_: Help text, hint message
+
 **Repository context**:
 The instance origin, owner, and repository identity derived from the current Git repository's remote without changing the repository. It is ambient context, not a source of credentials.
 _Avoid_: Repository configuration, login profile

@@ -10,6 +10,7 @@ import json
 from typing import TYPE_CHECKING
 
 from gaxi.errors import UsageError
+from gaxi.suggestions import build, capability
 
 if TYPE_CHECKING:
     from gaxi.capability import Capability
@@ -69,7 +70,7 @@ def _reject_unknown(cap: Capability, payload: JsonObject, properties: JsonObject
     raise UsageError(
         msg,
         details=[("unknown", ", ".join(unknown)), ("capability", cap.key)],
-        help_commands=[f"gaxi capability {cap.key}"],
+        help_commands=build(capability(cap.key)),
     )
 
 

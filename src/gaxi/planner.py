@@ -11,8 +11,9 @@ import re
 from typing import TYPE_CHECKING
 
 from gaxi.http import parse_int
-from gaxi.naming import command, executable
+from gaxi.naming import command
 from gaxi.policy import IDENTIFIER_FIELDS
+from gaxi.suggestions import auth_add, capability, collect
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -119,18 +120,16 @@ class Planner:
                 return command("get", f"{self.path.rstrip('/')}/<{placeholder}>")
         return None
 
-    def related_suggestions(self, limit: int = 2) -> list[str]:
+    def related_suggestions(self) -> list[str]:
         """Concrete sub-resources of a detail route, such as its comments."""
-        return self._related_at(self.cap.path, self.path, limit)
+        return self._related_at(self.cap.path, self.path)
 
-    def _related_at(self, template: str, path: str, limit: int = 2) -> list[str]:
+    def _related_at(self, template: str, path: str) -> list[str]:
         found: list[str] = []
         for _cap, rest in self._child_of(template):
             if PLACEHOLDER.match(rest[0]):
                 continue
             found.append(command("get", f"{path.rstrip('/')}/{rest[0]}"))
-            if len(found) >= limit:
-                break
         return found
 
     def _resolved_detail(self, payload: dict[str, JsonValue]) -> tuple[str, str] | None:
@@ -198,17 +197,15 @@ class Planner:
         allow_policy_fallback: bool = True,
     ) -> list[str]:
         """Next actions for a collection result."""
-        suggestions = [
+        return collect(
             self.detail_suggestion(fields, allow_policy_fallback=allow_policy_fallback),
             self.next_page(classification),
-        ]
-        if not any(suggestions):
-            suggestions.append(self.alternative_filter())
-        return _first(suggestions, 2)
+            self.alternative_filter(),
+        )
 
     def for_empty_collection(self) -> list[str]:
         """Next actions when a collection came back empty."""
-        return _first([self.alternative_filter(), self.parent_collection()], 2)
+        return collect(self.alternative_filter(), self.parent_collection())
 
     def for_detail(
         self,
@@ -222,23 +219,22 @@ class Planner:
             resolved = self._resolved_detail(payload)
             if resolved is not None:
                 detail_path, detail_template = resolved
-                suggestions = [
+                return collect(
                     command("get", detail_path),
                     *self._related_at(detail_template, detail_path),
-                ]
-                return _first(suggestions, 2)
-        return _first(self.related_suggestions(), 2)
+                )
+        return collect(*self.related_suggestions())
 
     def for_error(self, status: int) -> list[str]:
         """Next actions for a failed request, chosen by status."""
         if status == UNAUTHORIZED or (status == FORBIDDEN and self._credential() is None):
-            return [f"{executable()} auth add {self.catalog.origin}".strip()]
+            return collect(auth_add(self.catalog.origin))
         if status == FORBIDDEN:
-            return [command("get", "/user", [], ["--fields login"])]
+            return collect(command("get", "/user", [], ["--fields login"]))
         if status == NOT_FOUND:
-            return _first([self.parent_collection()], 1)
+            return collect(self.parent_collection())
         if status == UNPROCESSABLE:
-            return [f"{executable()} capability {self.cap.key}"]
+            return collect(capability(self.cap.key))
         return []
 
     def _credential(self) -> Credential | None:
@@ -246,16 +242,6 @@ class Planner:
         if self.session is None:
             return None
         return self.session.credential
-
-
-def _first(candidates: Iterable[str | None], limit: int) -> list[str]:
-    found: list[str] = []
-    for candidate in candidates:
-        if candidate and candidate not in found:
-            found.append(candidate)
-        if len(found) >= limit:
-            break
-    return found
 
 
 def _first_identifier_field(fields: Sequence[str]) -> str | None:

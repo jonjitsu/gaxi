@@ -16,6 +16,7 @@ from gaxi.catalog import Catalog
 from gaxi.config import cache_home, normalize_origin
 from gaxi.errors import GaxiError
 from gaxi.http import FIRST_SUCCESS, NOT_MODIFIED
+from gaxi.suggestions import build, context, example_server_capabilities
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -89,10 +90,7 @@ def resolve_origin(
     raise GaxiError(
         msg,
         details=[("checked", "--server, GITEA_SERVER, git remotes, configured default")],
-        help_commands=[
-            "gaxi --server https://gitea.example.com capabilities",
-            "gaxi context",
-        ],
+        help_commands=build(example_server_capabilities(), context()),
     )
 
 
@@ -219,7 +217,7 @@ def load_catalog(
             msg,
             status=response.status,
             details=[("request", f"GET {source_url}")],
-            help_commands=[f"gaxi --server {origin} context"],
+            help_commands=build(context(server=origin)),
         )
     document = _parse_document(response, source_url)
     _store(path, origin, source_url, response, document, now)

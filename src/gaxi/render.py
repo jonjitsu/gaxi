@@ -8,14 +8,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from gaxi.document import Aggregate, Document, Lines, Mapping, Scalar, Table
+from gaxi.document import Aggregate, Document, Mapping, Scalar, Table
+from gaxi.suggestions import lines as suggestion_lines
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
     from gaxi.jsonshape import JsonValue
-
-MAX_HELP_COMMANDS = 3
 
 
 def _cell(value: JsonValue, *, truncated: bool) -> Scalar:
@@ -158,7 +157,7 @@ def error(
 
 
 def _add_help(document: Document, help_commands: Iterable[str]) -> Document:
-    commands = [command for command in help_commands if command]
-    if commands:
-        document.add("help", Lines(commands[:MAX_HELP_COMMANDS]))
+    rendered = suggestion_lines(*help_commands)
+    if rendered is not None:
+        document.add("help", rendered)
     return document
