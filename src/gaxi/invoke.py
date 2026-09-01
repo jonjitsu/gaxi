@@ -134,7 +134,7 @@ def _resolve_invocation(
         options.input_json,
         apply_pagination=apply_pagination,
     )
-    planner = Planner(catalog, cap, path, binding, options)
+    planner = Planner(catalog, cap, path, binding, options, session)
     return Invocation(session, cap, props, binding, planner, method, path)
 
 

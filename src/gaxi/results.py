@@ -16,6 +16,7 @@ from gaxi.document import Document, Lines, Mapping, Scalar, Table
 from gaxi.errors import EXIT_FAILURE, GaxiError
 from gaxi.invocation import Outcome
 from gaxi.naming import command
+from gaxi.planner import FORBIDDEN
 from gaxi.policy import fallback_projection, schema_field_names
 from gaxi.transport import CHUNK
 
@@ -62,11 +63,17 @@ def render_classification(
     """Shape one classified response into the result the caller receives."""
     options = inv.options
     if classification.kind == "error":
+        details: list[tuple[str, JsonValue]] = []
+        if classification.status == FORBIDDEN:
+            credential = inv.session.credential
+            if credential:
+                details.append(("credential", credential.source))
         return Outcome(
             render.error(
                 _error_message(classification),
                 status=classification.status,
                 request=inv.request_line,
+                details=details,
                 help_commands=inv.planner.for_error(classification.status),
             ),
             exit_code=EXIT_FAILURE,

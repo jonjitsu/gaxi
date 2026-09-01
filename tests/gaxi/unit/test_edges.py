@@ -204,6 +204,22 @@ class PlannerEdgeTest(unittest.TestCase):
         )
         assert planner.for_detail()[0] == "gaxi get /repos/acme/widgets/issues/1/comments"
 
+    def test_forbidden_with_a_credential_suggests_identity_lookup(self) -> None:
+        session = support.make_session(
+            env={"GITEA_SERVER": support.ORIGIN, "GITEA_TOKEN": "secret"},
+        )
+        planner = self.planner("post:/repos/{owner}/{repo}/issues", "/repos/acme/widgets/issues")
+        planner.session = session
+        assert planner.for_error(403) == ["gaxi get /user --fields login"]
+
+    def test_forbidden_without_a_credential_suggests_auth_setup(self) -> None:
+        planner = self.planner("post:/repos/{owner}/{repo}/issues", "/repos/acme/widgets/issues")
+        assert planner.for_error(403) == ["gaxi auth add https://gitea.example.com"]
+
+    def test_unauthorized_suggests_auth_setup(self) -> None:
+        planner = self.planner("get:/user", "/user")
+        assert planner.for_error(401) == ["gaxi auth add https://gitea.example.com"]
+
     def test_a_mutate_with_a_non_object_payload_falls_back(self) -> None:
         cap = CATALOG.by_key["post:/repos/{owner}/{repo}/issues"]
         binding: Any = unittest.mock.Mock(query=[], body={"title": "Ship"})

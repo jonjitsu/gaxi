@@ -254,6 +254,33 @@ class FailureTest(unittest.TestCase):
         assert code == 1
         assert "- gaxi auth add https://gitea.example.com" in out
 
+    def test_forbidden_with_a_credential_names_the_source_and_identity(self) -> None:
+        code, out, _ = run_cli(
+            ["post", "/repos/acme/widgets/issues", "title=bug"],
+            responses=[json_response(
+                {"message": "user should have a permission to write to a repo"},
+                status=403,
+            )],
+            env={"GITEA_SERVER": support.ORIGIN, "GITEA_TOKEN": "secret-token"},
+        )
+        assert code == 1
+        assert "  status: 403" in out
+        assert "  credential: environment" in out
+        assert "- gaxi get /user --fields login" in out
+        assert "auth add" not in out
+
+    def test_forbidden_without_a_credential_suggests_origin_scoped_setup(self) -> None:
+        code, out, _ = run_cli(
+            ["post", "/repos/acme/widgets/issues", "title=bug"],
+            responses=[json_response(
+                {"message": "user should have a permission to write to a repo"},
+                status=403,
+            )],
+        )
+        assert code == 1
+        assert "- gaxi auth add https://gitea.example.com" in out
+        assert "credential:" not in out
+
     def test_unknown_command_exits_two(self) -> None:
         code, out, _ = run_cli(["frobnicate"])
         assert code == 2

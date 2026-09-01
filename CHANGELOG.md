@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- A 403 with a resolved credential now names the credential source in the
+  error and suggests checking the authenticated identity instead of
+  re-authenticating. `auth add` remains the suggestion for 401 and for 403 when
+  no credential was attached.
 - After a mutation that returns an object, `help[]` now points at the created
   entity's detail route with the identifier taken from the response payload,
   instead of unrelated sibling collection routes. When the payload carries no

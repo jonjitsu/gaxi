@@ -20,12 +20,14 @@ if TYPE_CHECKING:
     from gaxi.capability import Capability
     from gaxi.catalog import Catalog
     from gaxi.classify import Classification
+    from gaxi.credentials import Credential
     from gaxi.jsonshape import JsonValue
-    from gaxi.session import Options
+    from gaxi.session import Options, Session
 
 PAGINATION = ("page", "limit")
 MIN_DETAIL_SEGMENTS = 2
-UNAUTHORIZED = (401, 403)
+UNAUTHORIZED = 401
+FORBIDDEN = 403
 NOT_FOUND = 404
 UNPROCESSABLE = 422
 
@@ -48,12 +50,14 @@ class Planner:
         path: str,
         binding: Binding,
         options: Options,
+        session: Session | None = None,
     ) -> None:
         self.catalog = catalog
         self.cap = cap
         self.path = path
         self.binding = binding
         self.options = options
+        self.session = session
 
     # command reconstruction ------------------------------------------------
     def _fixed_assignments(
@@ -203,13 +207,21 @@ class Planner:
 
     def for_error(self, status: int) -> list[str]:
         """Next actions for a failed request, chosen by status."""
-        if status in UNAUTHORIZED:
+        if status == UNAUTHORIZED or (status == FORBIDDEN and self._credential() is None):
             return [f"{executable()} auth add {self.catalog.origin}".strip()]
+        if status == FORBIDDEN:
+            return [command("get", "/user", [], ["--fields login"])]
         if status == NOT_FOUND:
             return _first([self.parent_collection()], 1)
         if status == UNPROCESSABLE:
             return [f"{executable()} capability {self.cap.key}"]
         return []
+
+    def _credential(self) -> Credential | None:
+        """The credential attached to this request, if any."""
+        if self.session is None:
+            return None
+        return self.session.credential
 
 
 def _first(candidates: Iterable[str | None], limit: int) -> list[str]:
