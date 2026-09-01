@@ -37,6 +37,12 @@ def release_prepare(c: Context) -> None:
     print(f"prepared {version} ({level})")
 
 
+@task(name="release-version")
+def release_version(c: Context) -> None:  # noqa: ARG001
+    """Print the version pyproject currently declares, and nothing else."""
+    print(project.current_version(project.PATH.read_text(encoding="utf-8")))
+
+
 @task(name="release-notes")
 def release_notes(c: Context) -> None:  # noqa: ARG001
     """Print the changelog section for the version pyproject currently declares."""

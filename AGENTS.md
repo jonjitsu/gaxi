@@ -31,6 +31,55 @@ Before adding or changing a command, answer these questions in its tests and imp
 
 Use stable field ordering and stable headers. Do not make agents infer whether empty stdout means “no results”, “a failed command”, or “a missing field”. Do not require an agent to make a second request for totals or obvious derived status when the API already exposes enough information to compute them.
 
+## Commits and releasing
+
+Releases are automated and read the commit log, so commit messages are an
+interface, not prose. Two rules, both load-bearing.
+
+**Write [Conventional Commits](https://www.conventionalcommits.org) subjects.**
+`type(scope): subject`, where the type is one of `build`, `chore`, `ci`, `docs`,
+`feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`. The release
+pipeline derives the version bump from the types since the last tag:
+
+| Commit | Bump |
+|---|---|
+| `feat: …` | minor |
+| anything else with a recognised type | patch |
+| `type!: …`, or a `BREAKING CHANGE:` trailer in the body | major |
+
+A subject with no recognised type still counts as a patch, but it is reported in
+the release job output rather than passed over. An unrecognised type is treated
+the same way, so `feature:` for `feat:` cannot quietly cost a minor bump — check
+that list when a release proposes a smaller bump than expected. Keep the subject
+in the project's ordinary imperative voice; the type is a prefix, not a
+replacement for a readable sentence.
+
+**Add a `CHANGELOG.md` entry under `## Unreleased` as the work lands.** The
+changelog is written by hand and is never generated from commit subjects. Its
+entries carry the reasoning a subject has no room for — what was wrong before,
+what was rejected, what the consequence is. A release renames the unreleased
+section to the version being cut and opens a fresh empty one; whatever is in the
+section at that moment is what ships as the release notes, so an entry written
+carelessly is published verbatim.
+
+The proposed version is not decided in advance — it tracks what has accumulated.
+Every merge to `master` recomputes it from the released version plus the highest
+bump among all commits since the last tag, and force-pushes the release branch
+from `master` rather than building on the previous proposal. So a cycle holding
+only fixes proposes `1.0.1`; the first `feat:` to land retitles the same pull
+request to `1.1.0`, and a breaking change retitles it to `2.0.0`. Because the
+base is always the released version, the proposal escalates with the content
+instead of drifting upward one patch per merge.
+
+This makes the level a declaration, not a deduction: nothing can tell from a
+diff whether a change breaks a caller, so semver correctness rests on authors
+marking breaking work as breaking. That is why a human merges the release pull
+request, and why it is the place to override a bump the log inferred wrongly.
+
+Never hand-edit a version. `pyproject.toml` is the single source, `uv.lock`
+records it, and the changelog heading names it; the pipeline moves all three
+together.
+
 ## Repository integration
 
 | Concern | Location |

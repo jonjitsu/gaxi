@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Fixed the release workflows reading the version through a module path that no
+  longer exists. They still ran `python -c 'import release; …'` after the
+  mechanics moved into `automation/ci/`, and because a failed command
+  substitution inside `echo` does not fail the step, the version came out empty
+  instead of erroring: the first run opened a pull request titled `Release` and
+  committed `release:`. The bump itself was correct, but `release-tag` would
+  have tried to create an empty tag. Both workflows now read the version through
+  `invoke release-version`, so the shell holds no knowledge of the module
+  layout, and the steps run under `set -euo pipefail` and refuse an empty
+  version.
+- Documented the commit and release contract in `AGENTS.md`: the Conventional
+  Commits types the bump is derived from, that the changelog is hand-written
+  under `## Unreleased` and published verbatim as release notes, and that the
+  proposed version tracks accumulated work rather than being chosen up front.
+
 - Automated releasing behind a standing release pull request. Every merge to
   `master` refreshes a `release/next` branch carrying the version bump, the
   relocked `uv.lock`, and the `## Unreleased` section retitled to the version

@@ -41,14 +41,20 @@ jobs:
       - name: Prepare the bump
         id: prepare
         run: |
+          set -euo pipefail
           uv run invoke release-prepare
           if git diff --quiet; then
             echo "prepared=false" >> "$GITHUB_OUTPUT"
             echo "nothing to release"
             exit 0
           fi
+          version="$(uv run invoke release-version)"
+          if [ -z "$version" ]; then
+            echo "could not read the prepared version" >&2
+            exit 1
+          fi
           echo "prepared=true" >> "$GITHUB_OUTPUT"
-          echo "version=$(uv run python -c 'import release; print(release.current_version(release.PYPROJECT.read_text()))')" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       # The bump changes the installed distribution's version, and the suite
       # asserts `gaxi.__version__` matches pyproject, so the environment has to

@@ -32,7 +32,13 @@ jobs:
       - name: Read the released version
         id: released
         run: |
-          echo "version=$(uv run python -c 'import release; print(release.current_version(release.PYPROJECT.read_text()))')" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          version="$(uv run invoke release-version)"
+          if [ -z "$version" ]; then
+            echo "could not read the released version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Refuse to retag
         env:

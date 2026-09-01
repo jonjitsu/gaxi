@@ -21,6 +21,7 @@ def verify(c: Context) -> None:
 ns.add_task(docs_tasks.docs)
 ns.add_task(docs_tasks.docs_check)
 ns.add_task(release_tasks.release_prepare)
+ns.add_task(release_tasks.release_version)
 ns.add_task(release_tasks.release_notes)
 ns.add_task(verify)
 
