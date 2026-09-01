@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Field-selection precedence now lives in `gaxi.fields.fields` instead of being
+  split across `results`, `policy`, and `projection`. Result shaping calls one
+  function; `projection` keeps truncation and dotted-path resolution only.
 - Downloading a response body (`--save`) now lives in `gaxi.download` instead of
   result shaping. Streaming, digesting, atomic replace, and the file receipt are
   owned by `save(response, path, overwrite) -> Receipt`; `results` keeps only

@@ -11,28 +11,24 @@ from typing import TYPE_CHECKING
 from gaxi import projection, render
 from gaxi.document import Document, Lines, Mapping, Scalar, Table
 from gaxi.errors import EXIT_FAILURE, GaxiError
+from gaxi.fields import fields as resolve_fields
 from gaxi.invocation import Outcome
 from gaxi.naming import command
 from gaxi.planner import FORBIDDEN
-from gaxi.policy import fallback_projection, schema_field_names
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from gaxi.binding import Binding
-    from gaxi.capability import Capability
     from gaxi.classify import Classification
     from gaxi.invocation import Invocation
     from gaxi.jsonshape import JsonValue
     from gaxi.planner import Planner
-    from gaxi.policy import Properties
-    from gaxi.session import Options
     from gaxi.transport import Response
 
 
 MAX_HELP_COMMANDS = 3
 MAX_ERROR_ITEMS = 3
-MAX_DECLARED_FIELDS = 4
 
 
 def render_classification(
@@ -113,41 +109,6 @@ def _error_message(classification: Classification) -> str:
     return f"request failed with status {classification.status}"
 
 
-def _declared_names(cap: Capability) -> list[str]:
-    return schema_field_names(cap.success_response())
-
-
-def _fields_for(
-    cap: Capability,
-    props: Properties,
-    items: Sequence[JsonValue],
-    options: Options,
-) -> list[str]:
-    if options.fields:
-        projection.validate_fields(options.fields, items, _declared_names(cap))
-        return list(options.fields)
-    chosen = _policy_fields(cap, props, items)
-    if chosen:
-        return chosen
-    observed = projection.observed_fields(items)
-    if observed:
-        return fallback_projection(observed)
-    return _declared_names(cap)[:MAX_DECLARED_FIELDS]
-
-
-def _policy_fields(
-    cap: Capability,
-    props: Properties,
-    items: Sequence[JsonValue],
-) -> list[str]:
-    if not props.projection:
-        return []
-    available = set(projection.observed_fields(items)) | set(_declared_names(cap))
-    if not available:
-        return list(props.projection)
-    return [field for field in props.projection if field.split(".")[0] in available]
-
-
 def _capped(help_commands: Sequence[str], first: str) -> list[str]:
     return [first, *help_commands][:MAX_HELP_COMMANDS]
 
@@ -155,7 +116,7 @@ def _capped(help_commands: Sequence[str], first: str) -> list[str]:
 def _collection_document(inv: Invocation, classification: Classification) -> Document:
     options = inv.options
     items = classification.payload or []
-    fields = _fields_for(inv.cap, inv.props, items, options)
+    fields = resolve_fields(inv.cap, inv.props, items, options.fields)
     rows, truncations = projection.project_rows(items, fields, full=options.full)
     if not items:
         return render.collection(
@@ -189,7 +150,7 @@ def _detail_document(inv: Invocation, classification: Classification) -> Documen
     options = inv.options
     value = classification.payload
     items = [value] if isinstance(value, dict) else []
-    fields = _fields_for(inv.cap, inv.props, items, options)
+    fields = resolve_fields(inv.cap, inv.props, items, options.fields)
     pairs, truncations = projection.project_object(value, fields, full=options.full)
     help_commands = inv.planner.for_detail(classification, effect=inv.props.effect)
     if truncations:
