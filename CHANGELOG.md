@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.1.0
+
 - Mirrored releases to the public GitHub repository. Publishing a tag now pushes
   the tagged commit and the tag to `jonjitsu/gaxi` and opens a GitHub release
   whose body is the same changelog section Gitea publishes, read from the tagged
