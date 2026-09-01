@@ -7,10 +7,19 @@ output encoding.
 
 from __future__ import annotations
 
+import difflib
 import json
 from typing import TYPE_CHECKING
 
 from gaxi.errors import UsageError
+
+# Response-name pairs only — not planner path-param aliases (login→assignee, etc.).
+PROJECT_FIELD_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "index": ("index", "number"),
+    "number": ("number", "index"),
+    "login": ("login", "username"),
+    "username": ("username", "login"),
+}
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -19,6 +28,8 @@ if TYPE_CHECKING:
 
 LIMIT = 160
 KNOWN_FIELDS_SHOWN = 12
+DID_YOU_MEAN_CUTOFF = 0.75
+DID_YOU_MEAN_MARGIN = 0.15
 ELLIPSIS = "…"
 MISSING = object()
 
@@ -66,6 +77,51 @@ def observed_fields(items: Iterable[JsonValue]) -> list[str]:
     return names
 
 
+def _field_head(field: str) -> str:
+    return field.split(".", maxsplit=1)[0]
+
+
+def _field_closeness(requested: str, candidate: str) -> float:
+    head = _field_head(requested)
+    if candidate in PROJECT_FIELD_SYNONYMS.get(head, ()):
+        return 1.0
+    return difflib.SequenceMatcher(None, head, candidate).ratio()
+
+
+def _rank_known_fields(requested: str, known: set[str]) -> list[str]:
+    return sorted(known, key=lambda name: (-_field_closeness(requested, name), name))
+
+
+def _did_you_mean(requested: str, known: set[str]) -> str | None:
+    head = _field_head(requested)
+    for synonym in PROJECT_FIELD_SYNONYMS.get(head, ()):
+        if synonym != head and synonym in known:
+            return synonym
+    ranked = sorted(known, key=lambda name: _field_closeness(requested, name), reverse=True)
+    if not ranked:
+        return None
+    best = ranked[0]
+    best_score = _field_closeness(requested, best)
+    if best_score < DID_YOU_MEAN_CUTOFF:
+        return None
+    if len(ranked) > 1:
+        second_score = _field_closeness(requested, ranked[1])
+        if best_score - second_score < DID_YOU_MEAN_MARGIN:
+            return None
+    return best
+
+
+def _unknown_field_details(field: str, known: set[str]) -> list[tuple[str, str]]:
+    ranked = _rank_known_fields(field, known)
+    details: list[tuple[str, str]] = [
+        ("field", field),
+        ("known", ", ".join(ranked[:KNOWN_FIELDS_SHOWN]) or "none observed"),
+    ]
+    if suggestion := _did_you_mean(field, known):
+        details.append(("did_you_mean", suggestion))
+    return details
+
+
 def validate_fields(
     fields: Iterable[str],
     items: Sequence[JsonValue],
@@ -74,19 +130,13 @@ def validate_fields(
     """Reject a selected field the advertised or observed response does not have."""
     known = set(declared) | set(observed_fields(items))
     for field in fields:
-        head = field.split(".")[0]
+        head = _field_head(field)
         if head in known:
             continue
         if any(resolve_path(item, field) is not MISSING for item in items):
             continue
         msg = f"no response field named {field}"
-        raise UsageError(
-            msg,
-            details=[
-                ("field", field),
-                ("known", ", ".join(sorted(known)[:KNOWN_FIELDS_SHOWN]) or "none observed"),
-            ],
-        )
+        raise UsageError(msg, details=_unknown_field_details(field, known))
 
 
 def project_rows(

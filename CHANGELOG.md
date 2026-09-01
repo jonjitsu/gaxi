@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Unknown-field validation errors now rank the reported `known` names by
+  closeness to the requested field and add a `did_you_mean` detail when one
+  candidate is a clear near miss. Projection aliases are limited to real
+  response-name pairs (for example `index`/`number`, `login`/`username`), not
+  planner path-param identity synonyms such as `login`→`assignee`.
 - `--input-json` now accepts a JSON array or NDJSON (one object per line) to
   send one request per element against the same resolved capability. Batch output
   is a collection result (`count: N of N total` plus a table). Partial failures

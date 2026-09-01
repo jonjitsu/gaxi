@@ -26,6 +26,12 @@ PRESENTATION_KEYS = ("entity", "entity_singular", "projection")
 OVERLAY_KEYS = (*PRESENTATION_KEYS, "confirmation", "retry", "response")
 
 IDENTIFIER_FIELDS = ("index", "id", "number", "sha", "login", "username", "uuid", "key")
+_LOGIN_SYNONYMS = ("login", "username", "org", "assignee", "collaborator", "user")
+FIELD_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "index": ("index", "number"),
+    "number": ("number", "index"),
+    **dict.fromkeys(_LOGIN_SYNONYMS, _LOGIN_SYNONYMS),
+}
 NAME_FIELDS = ("name", "title", "full_name", "tag_name", "path", "ref")
 STATE_FIELDS = ("state", "status", "active", "unread")
 VERBOSE_FIELDS = ("body", "description", "content", "message", "diff", "patch", "readme")

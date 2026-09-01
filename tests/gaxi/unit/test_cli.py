@@ -93,6 +93,29 @@ class ProjectionTest(unittest.TestCase):
         assert code == 2
         assert "no response field named nope" in out
 
+    def test_a_synonym_unknown_field_suggests_the_response_name(self) -> None:
+        code, out, _ = run_cli(
+            ["get", "/repos/acme/widgets/issues", "--fields", "index,title"],
+            responses=[json_response([{"number": 1, "title": "Fix"}])],
+        )
+        assert code == 2
+        assert "did_you_mean: number" in out
+        assert "number, title" in out
+
+    def test_login_on_issue_fields_does_not_suggest_assignee(self) -> None:
+        issue = {
+            "number": 1,
+            "title": "Fix",
+            "user": {"login": "alice"},
+            "assignee": {"login": "bob"},
+        }
+        code, out, _ = run_cli(
+            ["get", "/repos/acme/widgets/issues", "--fields", "login,title"],
+            responses=[json_response([issue])],
+        )
+        assert code == 2
+        assert "did_you_mean" not in out
+
     def test_dotted_paths_select_nested_scalars(self) -> None:
         rows = [{"id": 3, "user": {"login": "alice"}, "created_at": "t"}]
         _, out, _ = run_cli(["get", "/repos/acme/widgets/issues/42/comments",

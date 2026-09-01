@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from gaxi.http import parse_int
 from gaxi.naming import command, shell_quote
-from gaxi.policy import IDENTIFIER_FIELDS
+from gaxi.policy import FIELD_SYNONYMS, IDENTIFIER_FIELDS
 from gaxi.suggestions import auth_add, capability, collect
 
 if TYPE_CHECKING:
@@ -35,15 +35,6 @@ NOT_FOUND = 404
 UNPROCESSABLE = 422
 
 PLACEHOLDER = re.compile(r"^\{([^{}]+)\}$")
-
-# Path-parameter names and their payload synonyms, tried before the generic fallback.
-_LOGIN_SYNONYMS = ("login", "username", "org", "assignee", "collaborator", "user")
-_PARAM_SYNONYMS: dict[str, tuple[str, ...]] = {
-    "index": ("index", "number"),
-    "number": ("number", "index"),
-    **dict.fromkeys(_LOGIN_SYNONYMS, _LOGIN_SYNONYMS),
-}
-
 
 class Planner:
     """Builds one to three concrete next actions for a result."""
@@ -288,7 +279,7 @@ def _first_identifier_field(fields: Sequence[str]) -> str | None:
 def _placeholder_compatible(path_param: str, field_name: str) -> bool:
     if field_name == path_param:
         return True
-    return field_name in _PARAM_SYNONYMS.get(path_param, ())
+    return field_name in FIELD_SYNONYMS.get(path_param, ())
 
 
 def _compatible_identifier(fields: Sequence[str], path_param: str) -> str | None:
@@ -322,7 +313,7 @@ def _detail_placeholder(
 
 def _identifier_from_payload(payload: dict[str, JsonValue], param: str) -> JsonValue | None:
     """One externally usable identifier from a mutation response payload."""
-    synonyms = _PARAM_SYNONYMS.get(param, (param,))
+    synonyms = FIELD_SYNONYMS.get(param, (param,))
     candidates = (*synonyms, *IDENTIFIER_FIELDS)
     seen: set[str] = set()
     for name in candidates:

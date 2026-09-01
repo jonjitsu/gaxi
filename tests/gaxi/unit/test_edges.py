@@ -7,6 +7,8 @@ import unittest
 import unittest.mock
 from typing import Any
 
+import pytest
+
 import gaxi.__main__
 from gaxi import jsonshape, repo_context
 from gaxi.binding import _as_query_text, bind
@@ -18,6 +20,7 @@ from gaxi.credentials import CredentialResolver
 from gaxi.discovery import _remote_origin, _sole_remote_origin
 from gaxi.document import Document
 from gaxi.encode import _yaml_lines, to_yaml
+from gaxi.errors import UsageError
 from gaxi.jsonbody import _json_type_matches, body_properties
 from gaxi.options import Options, RequestOptions
 from gaxi.planner import (
@@ -513,11 +516,56 @@ class OverlayTest(unittest.TestCase):
 
 
 class ProjectionEdgeTest(unittest.TestCase):
+    ISSUE_FIELDS = (
+        "assets", "assignee", "assignees", "body", "closed_at", "comments",
+        "content_version", "created_at", "due_date", "html_url", "id", "is_locked",
+        "number", "title", "state", "updated_at",
+    )
+
     def test_a_declared_field_is_accepted_without_being_observed(self) -> None:
         validate_fields(["index"], [], declared=["index"])
 
     def test_a_field_resolvable_in_one_item_is_accepted(self) -> None:
         validate_fields(["a.b"], [{"c": 1}, {"a": {"b": 2}}])
+
+    def test_a_synonym_near_miss_is_suggested_and_ranked_first(self) -> None:
+        with pytest.raises(UsageError) as caught:
+            validate_fields(["index"], [], declared=self.ISSUE_FIELDS)
+        details = dict(caught.value.details)
+        assert details["did_you_mean"] == "number"
+        assert details["known"].startswith("number,")
+
+    def test_a_typo_near_miss_is_suggested(self) -> None:
+        with pytest.raises(UsageError) as caught:
+            validate_fields(["titl"], [], declared=["number", "title", "state"])
+        details = dict(caught.value.details)
+        assert details["did_you_mean"] == "title"
+        assert details["known"].startswith("title,")
+
+    def test_an_ambiguous_near_miss_omits_did_you_mean(self) -> None:
+        with pytest.raises(UsageError) as caught:
+            validate_fields(["nope"], [], declared=["name", "note", "node"])
+        details = dict(caught.value.details)
+        assert "did_you_mean" not in details
+
+    def test_a_single_clear_typo_is_suggested(self) -> None:
+        with pytest.raises(UsageError) as caught:
+            validate_fields(["titl"], [], declared=["title"])
+        details = dict(caught.value.details)
+        assert details["did_you_mean"] == "title"
+
+    def test_an_unknown_field_with_no_known_names_omits_did_you_mean(self) -> None:
+        with pytest.raises(UsageError) as caught:
+            validate_fields(["nope"], [], declared=[])
+        details = dict(caught.value.details)
+        assert details["known"] == "none observed"
+        assert "did_you_mean" not in details
+
+    def test_login_on_issue_fields_does_not_suggest_assignee(self) -> None:
+        with pytest.raises(UsageError) as caught:
+            validate_fields(["login"], [], declared=self.ISSUE_FIELDS)
+        details = dict(caught.value.details)
+        assert "did_you_mean" not in details
 
 
 class DetailFallbackTest(unittest.TestCase):
