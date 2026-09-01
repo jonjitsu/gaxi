@@ -10,6 +10,12 @@
   against 314s of job time — effectively serialised, half of it duplicated.
   `push` is now limited to `master`, where there is no pull request to stand in
   for it; branch work is gated by `pull_request` alone.
+- Recognised `release` as a commit type. `release-prepare` writes
+  `release: X.Y.Z`, a type its own checker did not know, so the pipeline
+  generated a commit it would report as untyped. That commit is the one the tag
+  lands on and so normally falls outside `tag..HEAD`, but a release whose
+  tagging failed leaves it inside the window, where the noise would appear
+  exactly while someone is debugging the failure.
 
 ## 1.1.0
 

@@ -51,6 +51,16 @@ class UnconventionalTest(unittest.TestCase):
         assert commits.unconventional(["feat: a", "ci: b", "chore(deps): c"]) == []
 
 
+class ReleaseCommitTest(unittest.TestCase):
+    """The pipeline must not generate a commit its own checker rejects."""
+
+    def test_the_generated_release_commit_carries_a_recognised_type(self) -> None:
+        assert commits.unconventional(["release: 1.1.0"]) == []
+
+    def test_a_release_commit_is_a_patch_not_a_feature(self) -> None:
+        assert commits.bump_level(["release: 1.1.0"]) == PATCH
+
+
 class HistoryTest(unittest.TestCase):
     def test_this_repository_has_a_readable_history(self) -> None:
         assert commits.since(commits.latest_tag()) or commits.latest_tag()
