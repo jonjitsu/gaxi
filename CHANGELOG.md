@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+
+## 1.2.0
 - Unknown-field validation errors now rank the reported `known` names by
   closeness to the requested field and add a `did_you_mean` detail when one
   candidate is a clear near miss. Projection aliases are limited to real
