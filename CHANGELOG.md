@@ -1,7 +1,6 @@
 # Changelog
 
 ## Unreleased
-
 - Unknown-field validation errors now rank the reported `known` names by
   closeness to the requested field and add a `did_you_mean` detail when one
   candidate is a clear near miss. Projection aliases are limited to real
@@ -79,6 +78,16 @@
   `type=issues` qualifier so pull requests are not double-counted. When `/user`
   returns JSON without a `login`, the home view reports the credential as
   unverified.
+- Fixed `release-prepare` retitling an unrelated pull request into the release.
+  It looked up the standing release pull request with
+  `GET /pulls?state=open&head=release/next`, but Gitea's list-pulls declares no
+  `head` input and ignores the parameter instead of rejecting it, so the query
+  returned every open pull request and `.[0]` took whichever came first. It
+  patched pull request #24 — an unrelated fix — into `Release 1.1.1`, and
+  merging that left `release/next` with no pull request at all. The head branch
+  is now filtered client-side, and the step runs under `set -euo pipefail` and
+  refuses empty release notes, the same guard the version lookup already had.
+
 - Stopped running every quality gate twice. `check` triggered on an unfiltered
   `push` as well as `pull_request`, so each commit on a branch ran all three
   jobs for the branch and then the same three for its pull request, and a
