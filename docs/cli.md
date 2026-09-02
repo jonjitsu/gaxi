@@ -76,7 +76,7 @@ Examples:
 ```text
 gaxi post /repos/acme/widgets/issues title="Broken deployment"
 gaxi post /repos/acme/widgets/issues --input-json @issue.json
-gaxi post /repos/acme/widgets/issues --input-json @issues.json
+gaxi post /repos/acme/widgets/issues --input-json '[{"title":"First"},{"title":"Second"}]'
 ```
 
 ## put

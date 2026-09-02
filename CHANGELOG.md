@@ -1,6 +1,19 @@
 # Changelog
 
 ## Unreleased
+- Batch mutations are now discoverable without reading `--help`. A successful
+  single-bodied create whose entity has a detail route suggests the same request
+  carrying several bodies, placed directly after the `get <detail>` suggestion so
+  it survives the three-suggestion cap. The template repeats the body that was
+  just sent, with `<field>` placeholders, and is withheld when repeating it
+  faithfully would be lossy or long: a body with a nested value, or with more than
+  three fields, gets no suggestion rather than a command that silently drops
+  fields. The generated Agent Skill gained a "Batch mutations" section, since the
+  skill — not `--help` — is what an agent reads before its first call, and it
+  previously described `--input-json` as one body only. The `post` help example
+  that demonstrated batching was `--input-json @issues.json`, distinguishable from
+  the single-body example above it only by a plural filename; it is now an inline
+  array so the shape is visible in the help text itself.
 
 ## 1.2.0
 - Unknown-field validation errors now rank the reported `known` names by

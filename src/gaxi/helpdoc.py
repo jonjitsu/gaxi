@@ -82,7 +82,8 @@ COMMANDS: dict[str, CommandSpec] = {
         "examples": [
             '{exe} post /repos/acme/widgets/issues title="Broken deployment"',
             "{exe} post /repos/acme/widgets/issues --input-json @issue.json",
-            "{exe} post /repos/acme/widgets/issues --input-json @issues.json",
+            ('{exe} post /repos/acme/widgets/issues --input-json '
+             '\'[{"title":"First"},{"title":"Second"}]\''),
         ],
     },
     "put": {

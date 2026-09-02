@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from gaxi.http import parse_int
 from gaxi.naming import command, shell_quote
 from gaxi.policy import FIELD_SYNONYMS, IDENTIFIER_FIELDS
-from gaxi.suggestions import auth_add, capability, collect
+from gaxi.suggestions import auth_add, batch_bodies, capability, collect
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from gaxi.session import Session
 
 PAGINATION = ("page", "limit")
+MAX_BATCH_TEMPLATE_FIELDS = 3
 MIN_DETAIL_SEGMENTS = 2
 UNAUTHORIZED = 401
 FORBIDDEN = 403
@@ -199,6 +200,28 @@ class Planner:
         options = [f"--fields {','.join(fields)}", "--full"] if fields else ["--full"]
         return command(self.cap.method, self.path, self._fixed_assignments(skip=()), options)
 
+    def batch_suggestion(self) -> str | None:
+        """The same mutation carrying several bodies, when it could have been batched.
+
+        The template repeats the body this request already sent, so it is offered
+        only for a small, wholly scalar body: truncating a longer one would hand
+        the caller a command that silently drops fields, and spelling it out in
+        full would cost more tokens than the suggestion is worth.
+        """
+        body = self.binding.body
+        if self.binding.is_batch() or self.binding.body_is_raw:
+            return None
+        if not isinstance(body, dict) or not body:
+            return None
+        names = [
+            name
+            for name, value in body.items()
+            if isinstance(value, str | int | float | bool)
+        ]
+        if len(names) != len(body) or len(names) > MAX_BATCH_TEMPLATE_FIELDS:
+            return None
+        return batch_bodies(self.cap.method, self.path, names)
+
     def detail_fields_full(
         self,
         payload: dict[str, JsonValue],
@@ -245,6 +268,7 @@ class Planner:
                 detail_path, detail_template = resolved
                 return collect(
                     command("get", detail_path),
+                    self.batch_suggestion(),
                     *self._related_at(detail_template, detail_path),
                 )
         return collect(*self.related_suggestions())

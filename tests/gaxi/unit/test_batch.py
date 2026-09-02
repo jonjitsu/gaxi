@@ -7,12 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from gaxi.binding import bind
+from gaxi.binding import Binding, bind
 from gaxi.catalog import Catalog
 from gaxi.classify import Classification
 from gaxi.errors import GaxiError, UsageError
 from gaxi.invoke import _batch_error_item, _batch_execution_error_item, _batch_success_item
 from gaxi.jsonbody import parse_input_json_bodies
+from gaxi.jsonshape import JsonValue
 from gaxi.planner import Planner
 from gaxi.results import (
     _batch_items_use_declared_fields,
@@ -612,3 +613,81 @@ class BatchResultFieldsTest(unittest.TestCase):
             ],
         )
         assert fields == ["error", "status"]
+
+
+class BatchDiscoverabilityTest(unittest.TestCase):
+    """A batch-capable mutation says so where an agent is already looking."""
+
+    def _create(self, *assignments: str) -> str:
+        code, out, _ = run_cli(
+            ["post", "/repos/acme/widgets/issues", *assignments],
+            responses=[json_response(
+                {"id": 999, "number": 42, "title": "Broken deployment",
+                 "state": "open", "updated_at": "t"},
+                status=201,
+            )],
+        )
+        assert code == 0
+        return out
+
+    def test_a_single_create_offers_the_batched_form_of_the_same_request(self) -> None:
+        out = self._create("title=Broken deployment", "body=it fell over")
+        assert (
+            '- gaxi post /repos/acme/widgets/issues --input-json '
+            '\'[{"title":"<title>","body":"<body>"},'
+            '{"title":"<title>","body":"<body>"}]\'' in out
+        )
+
+    def test_the_batched_form_never_displaces_the_created_entity(self) -> None:
+        out = self._create("title=Broken deployment")
+        help_lines = [line for line in out.splitlines() if line.startswith("  - ")]
+        assert help_lines[0] == "  - gaxi get /repos/acme/widgets/issues/42"
+        assert "--input-json" in help_lines[1]
+
+    def test_a_batch_result_does_not_suggest_batching_again(self) -> None:
+        code, out, _ = run_cli(
+            ["post", "/repos/acme/widgets/issues", "--input-json",
+             '[{"title":"one"},{"title":"two"}]'],
+            responses=[
+                json_response({"id": 1, "number": 1, "title": "one"}, status=201),
+                json_response({"id": 2, "number": 2, "title": "two"}, status=201),
+            ],
+        )
+        assert code == 0
+        assert "--input-json '[{\"title\":\"<title>\"}" not in out
+
+    def _planner_for_body(self, body: JsonValue) -> Planner:
+        binding = Binding()
+        binding.body = body
+        return Planner(CATALOG, CREATE_ISSUE, "/repos/acme/widgets/issues", binding)
+
+    def test_a_body_too_large_to_repeat_faithfully_is_left_alone(self) -> None:
+        body = {"title": "a", "body": "b", "milestone": 1, "state": "open"}
+        assert self._planner_for_body(body).batch_suggestion() is None
+
+    def test_a_body_with_a_nested_value_is_left_alone(self) -> None:
+        assert self._planner_for_body({"title": "a", "labels": [1, 2]}).batch_suggestion() is None
+
+    def test_an_empty_body_is_left_alone(self) -> None:
+        assert self._planner_for_body({}).batch_suggestion() is None
+
+
+class BatchHelpTest(unittest.TestCase):
+    """`--help` shows the batch shape, not a plural filename."""
+
+    def test_post_help_shows_an_inline_array_of_bodies(self) -> None:
+        code, out, _ = run_cli(["post", "--help"])
+        assert code == 0
+        assert (
+            '- gaxi post /repos/acme/widgets/issues --input-json '
+            '\'[{"title":"First"},{"title":"Second"}]\'' in out
+        )
+
+    def test_the_generated_skill_documents_batch_mutations(self) -> None:
+        code, out, _ = run_cli(["skill"], env={"GITEA_SERVER": support.ORIGIN})
+        assert code == 0
+        assert "## Batch mutations" in out
+        assert (
+            'gaxi post /repos/acme/widgets/issues --input-json '
+            '\'[{"title":"First"},{"title":"Second"}]\'' in out
+        )

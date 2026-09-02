@@ -13,10 +13,10 @@ from contextvars import ContextVar
 from typing import TYPE_CHECKING
 
 from gaxi.document import Lines
-from gaxi.naming import executable
+from gaxi.naming import executable, shell_quote
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
 MAX_SUGGESTIONS = 3
 _NO_HELP_ENV = "GAXI_NO_HELP"
@@ -140,6 +140,16 @@ def anonymous_get() -> str:
 def setup_skill_overwrite() -> str:
     """Suggest overwriting an existing generated skill."""
     return f"{executable()} setup skill --overwrite"
+
+
+def batch_bodies(method: str, path: str, fields: Sequence[str]) -> str:
+    """Suggest sending several bodies through one batched mutation.
+
+    Two elements, not one: the repetition is the whole point of the template,
+    and every value is a `<placeholder>` rather than a guessed runtime value.
+    """
+    body = "{" + ",".join(f'"{name}":"<{name}>"' for name in fields) + "}"
+    return f"{executable()} {method} {path} --input-json {shell_quote(f'[{body},{body}]')}"
 
 
 def disambiguate(method: str, path: str, key: str) -> str:

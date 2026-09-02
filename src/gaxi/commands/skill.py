@@ -25,6 +25,15 @@ VOCABULARY = [
 ]
 
 
+def _batch_example(full_name: str) -> str:
+    """One batched create, addressed to the ambient repository when there is one."""
+    repo = full_name or "<owner>/<repo>"
+    return (
+        f"{executable()} post /repos/{repo}/issues "
+        '--input-json \'[{"title":"First"},{"title":"Second"}]\''
+    )
+
+
 def run(session: Session) -> str:
     """Render the Agent Skill for this instance and repository context."""
     exe = executable()
@@ -57,6 +66,22 @@ def run(session: Session) -> str:
         "input named `output` cannot collide with `--output`."),
         "- Qualify an ambiguous input with `query:`, `body:`, or `form:`.",
         "- Repeat an assignment for array inputs; use `--input-json` for nested bodies.",
+        "",
+        "## Batch mutations",
+        "",
+        ("`--input-json` accepts a JSON array or NDJSON as well as one object. One "
+        "invocation then sends one request per body, so N creates cost one command "
+        "instead of N."),
+        "",
+        "```text",
+        _batch_example(full_name),
+        "```",
+        "",
+        "- The result is a collection with one row per body, in the order supplied.",
+        ("- A failing element does not abort the batch: its row carries `error` and "
+        "`status`, and the invocation exits non-zero."),
+        ("- `--yes` is given once for the whole invocation; `--save` and `--raw` are "
+        "rejected for batches."),
         "",
         "## Output contract",
         "",
