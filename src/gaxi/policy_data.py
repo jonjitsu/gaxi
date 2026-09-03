@@ -75,6 +75,7 @@ MUTATIONS = {
     "patch:/repos/{owner}/{repo}/issues/comments/{id}": ("none", "unknown"),
     "post:/repos/{owner}/{repo}/issues/{index}/labels": ("none", "unsafe"),
     "put:/repos/{owner}/{repo}/issues/{index}/labels": ("none", "safe"),
+    "post:/repos/{owner}/{repo}/issues/{index}/dependencies": ("none", "safe"),
     "post:/repos/{owner}/{repo}/issues/{index}/reactions": ("none", "safe"),
     "put:/repos/{owner}/{repo}/issues/{index}/subscriptions/{user}": ("none", "safe"),
     # pull requests

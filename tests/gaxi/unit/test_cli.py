@@ -267,7 +267,6 @@ class MutationTest(unittest.TestCase):
                 "post",
                 "/repos/acme/widgets/issues/23/dependencies",
                 "index=22",
-                "--allow-unknown",
             ],
             responses=[json_response(
                 {"number": 23, "title": "Blocked", "state": "open", "updated_at": "t"},
@@ -278,15 +277,17 @@ class MutationTest(unittest.TestCase):
         body = json.loads(support.recorded(session)[0]["body"])
         assert body == {"index": 22, "owner": "acme", "repo": "widgets"}
 
-    def test_issue_dependency_allow_unknown_help_includes_path_defaulted_body(self) -> None:
+    def test_issue_dependency_executes_without_acknowledgement(self) -> None:
         code, out, session = run_cli(
             ["post", "/repos/acme/widgets/issues/23/dependencies", "index=22"],
+            responses=[json_response(
+                {"number": 23, "title": "Blocked", "state": "open", "updated_at": "t"},
+                status=201,
+            )],
         )
-        assert code == 1
-        assert "requires --allow-unknown" in out
-        assert "body:owner=acme" in out
-        assert "body:repo=widgets" in out
-        assert support.recorded(session) == []
+        assert code == 0
+        assert "issue:" in out
+        assert support.recorded(session)
 
     def test_dry_run_sends_nothing_and_shows_context(self) -> None:
         code, out, session = run_cli(

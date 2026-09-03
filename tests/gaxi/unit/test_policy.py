@@ -42,6 +42,12 @@ class PolicyTest(unittest.TestCase):
         assert props.sources["confirmation"] == "builtin"
         assert props.retry == "unsafe"
 
+    def test_issue_dependency_is_a_known_ordinary_mutation(self) -> None:
+        props = self.resolve("post:/repos/{owner}/{repo}/issues/{index}/dependencies")
+        assert props.confirmation == "none"
+        assert props.sources["confirmation"] == "builtin"
+        assert props.retry == "unsafe"
+
     def test_unknown_mutation_semantics_are_named(self) -> None:
         props = self.resolve("post:/repos/{owner}/{repo}/releases/{id}/assets")
         assert props.confirmation == "unknown"

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Issue-dependency creation is now classified as an ordinary additive mutation
+  (`confirmation: none`) rather than falling through to `unknown`, so linking two
+  issues no longer demands `--allow-unknown`. The safeguard stays reserved for
+  operations whose semantics policy genuinely does not know.
 - `gaxi capability` now lists each success-response entity's available fields in
   `entity_fields[]`, with a `projected` flag for fields included in the default
   projection, so callers can choose `--fields` correctly before the first
