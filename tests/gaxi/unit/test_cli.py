@@ -13,12 +13,13 @@ from gaxi.invocation import Outcome
 from gaxi.repo_context import RepositoryContext
 from gaxi.transport import Transport
 from tests.gaxi import support
+from tests.gaxi.fixtures import document_with_labels
 from tests.gaxi.support import json_response, response, run_cli
 
 PULLS = [
-    {"number": 41, "title": "Fix race", "state": "open",
+    {"number": 41, "title": "Fix race", "state": "open", "merged": False,
      "updated_at": "2026-08-29T18:12:00Z", "body": "b"},
-    {"number": 37, "title": "Update docs", "state": "open",
+    {"number": 37, "title": "Update docs", "state": "open", "merged": False,
      "updated_at": "2026-08-28T09:31:00Z", "body": "b"},
 ]
 
@@ -32,9 +33,9 @@ class CollectionTest(unittest.TestCase):
         assert out.splitlines()[:5] == [
             "count: 2 of 17 total",
             "page: 1",
-            "pull_requests[2]{number,title,state,updated_at}:",
-            "  41,Fix race,open,2026-08-29T18:12:00Z",
-            "  37,Update docs,open,2026-08-28T09:31:00Z",
+            "pull_requests[2]{number,title,state,merged}:",
+            "  41,Fix race,open,false",
+            "  37,Update docs,open,false",
         ]
         assert "- gaxi get /repos/acme/widgets/pulls/<number>" in out
         assert session.requests == 1
@@ -123,6 +124,48 @@ class ProjectionTest(unittest.TestCase):
                             responses=[json_response(rows)])
         assert "comments[1]{id,user.login}:" in out
         assert "  3,alice" in out
+
+    def test_comment_default_projection_includes_body(self) -> None:
+        rows = [{"id": 3, "user": {"login": "alice"}, "body": "Ship it",
+                 "created_at": "2026-08-29T18:12:00Z"}]
+        _, out, _ = run_cli(["get", "/repos/acme/widgets/issues/42/comments"],
+                            responses=[json_response(rows)])
+        assert "comments[1]{id,user.login,body,created_at}:" in out
+        assert "  3,alice,Ship it,2026-08-29T18:12:00Z" in out
+
+    def test_comment_default_projection_truncates_body(self) -> None:
+        long_body = "The deployment began failing after the runner upgrade " + "z" * 200
+        rows = [{"id": 3, "user": {"login": "alice"}, "body": long_body,
+                 "created_at": "2026-08-29T18:12:00Z"}]
+        _, out, _ = run_cli(["get", "/repos/acme/widgets/issues/42/comments"],
+                            responses=[json_response(rows)])
+        assert "comments[1]{id,user.login,body,created_at}:" in out
+        assert "truncated[1]{row,field,characters}:" in out
+        assert f"  1,body,{len(long_body)}" in out
+        assert "--fields id,user.login,body,created_at --full" in out
+
+    def test_empty_comment_collection_keeps_default_projection(self) -> None:
+        code, out, _ = run_cli(["get", "/repos/acme/widgets/issues/42/comments"],
+                               responses=[json_response([])])
+        assert code == 0
+        assert out.splitlines()[0] == "count: 0"
+        assert out.splitlines()[1] == "comments[0]{id,user.login,body,created_at}:"
+
+    def test_label_default_projection_includes_exclusive(self) -> None:
+        rows = [{"id": 7, "name": "bug", "color": "d73a4a", "exclusive": True}]
+        _, out, _ = run_cli(["get", "/repos/acme/widgets/labels"],
+                            responses=[json_response(rows)],
+                            document=document_with_labels())
+        assert "labels[1]{id,name,color,exclusive}:" in out
+        assert "  7,bug,d73a4a,true" in out
+
+    def test_empty_label_collection_is_definitive(self) -> None:
+        code, out, _ = run_cli(["get", "/repos/acme/widgets/labels"],
+                               responses=[json_response([])],
+                               document=document_with_labels())
+        assert code == 0
+        assert out.splitlines()[0] == "count: 0"
+        assert out.splitlines()[1] == "labels[0]{id,name,color,exclusive}:"
 
     def test_absent_optional_field_emits_null(self) -> None:
         rows = [{"number": 41, "title": "Fix race"}]

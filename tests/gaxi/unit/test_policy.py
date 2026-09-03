@@ -4,7 +4,7 @@ from typing import override
 from gaxi.catalog import Catalog
 from gaxi.policy import Policy, Properties, fallback_projection
 from tests.gaxi import support
-from tests.gaxi.fixtures import DOCUMENT
+from tests.gaxi.fixtures import DOCUMENT, document_with_labels
 
 CATALOG = Catalog.from_document(DOCUMENT, origin=support.ORIGIN)
 
@@ -41,7 +41,18 @@ class PolicyTest(unittest.TestCase):
     def test_policy_projection_is_source_faithful(self) -> None:
         props = self.resolve("get:/repos/{owner}/{repo}/pulls")
         assert props.entity == "pull_requests"
-        assert props.projection == ["number", "title", "state", "updated_at"]
+        assert props.projection == ["number", "title", "state", "merged"]
+
+    def test_comment_projection_includes_body(self) -> None:
+        props = self.resolve("get:/repos/{owner}/{repo}/issues/{index}/comments")
+        assert props.entity == "comments"
+        assert props.projection == ["id", "user.login", "body", "created_at"]
+
+    def test_label_projection_includes_exclusive(self) -> None:
+        catalog = Catalog.from_document(document_with_labels(), origin=support.ORIGIN)
+        props = Policy().resolve(catalog.by_key["get:/repos/{owner}/{repo}/labels"])
+        assert props.entity == "labels"
+        assert props.projection == ["id", "name", "color", "exclusive"]
 
     def test_fallback_entity_and_projection_for_unknown_schema(self) -> None:
         props = self.resolve("get:/org/{org}/widgets")

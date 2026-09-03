@@ -10,16 +10,17 @@ BUNDLE_VERSION = "2026.08.30"
 # Response-schema fingerprint -> (collection name, detail name, projection)
 ENTITIES = {
     "Issue": ("issues", "issue", ["number", "title", "state", "updated_at"]),
-    "PullRequest": ("pull_requests", "pull_request", ["number", "title", "state", "updated_at"]),
+    "PullRequest": ("pull_requests", "pull_request", ["number", "title", "state", "merged"]),
     "Repository": ("repositories", "repository", ["full_name", "private", "fork", "updated_at"]),
     "User": ("users", "user", ["login", "full_name", "is_admin"]),
-    "Label": ("labels", "label", ["id", "name", "color"]),
+    "Label": ("labels", "label", ["id", "name", "color", "exclusive"]),
     "Milestone": ("milestones", "milestone", ["id", "title", "state", "due_on"]),
     "Release": ("releases", "release", ["id", "tag_name", "name", "draft"]),
     "Branch": ("branches", "branch", ["name", "protected", "user_can_push"]),
     "Tag": ("tags", "tag", ["name", "id"]),
     "Commit": ("commits", "commit", ["sha", "commit.message", "commit.author.date"]),
-    "Comment": ("comments", "comment", ["id", "user.login", "created_at"]),
+    # ADR 0019: comment lists include body by default (truncated per ADR 0008).
+    "Comment": ("comments", "comment", ["id", "user.login", "body", "created_at"]),
     "TimelineComment": ("timeline", "timeline_entry", ["id", "type", "created_at"]),
     "Organization": ("organizations", "organization", ["username", "full_name", "visibility"]),
     "Team": ("teams", "team", ["id", "name", "permission"]),

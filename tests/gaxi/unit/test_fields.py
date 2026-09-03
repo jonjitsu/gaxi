@@ -47,6 +47,20 @@ class FieldsPrecedenceTest(unittest.TestCase):
         props.projection = ["name"]
         assert fields(cap, props, [1, 2], None) == ["name"]
 
+    def test_dotted_policy_projection_survives_empty_collections(self) -> None:
+        cap = _cap(schema={
+            "type": "object",
+            "properties": {
+                "id": {"type": "integer"},
+                "body": {"type": "string"},
+                "user": {"type": "object"},
+                "created_at": {"type": "string"},
+            },
+        })
+        props = Properties()
+        props.projection = ["id", "user.login", "body", "created_at"]
+        assert fields(cap, props, [], None) == ["id", "user.login", "body", "created_at"]
+
     def test_observed_fields_use_fallback_ranking(self) -> None:
         cap = _cap()
         props = Properties()

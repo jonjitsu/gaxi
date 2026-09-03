@@ -15,6 +15,7 @@ PULL_REQUEST = {
         "number": {"type": "integer"},
         "title": {"type": "string"},
         "state": {"type": "string"},
+        "merged": {"type": "boolean"},
         "updated_at": {"type": "string"},
         "body": {"type": "string"},
         "html_url": {"type": "string"},
@@ -29,6 +30,16 @@ ISSUE = {
         "state": {"type": "string"},
         "updated_at": {"type": "string"},
         "body": {"type": "string"},
+    },
+}
+
+LABEL = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "integer"},
+        "name": {"type": "string"},
+        "color": {"type": "string"},
+        "exclusive": {"type": "boolean"},
     },
 }
 
@@ -310,3 +321,27 @@ DOCUMENT = {
         },
     },
 }
+
+
+def document_with_labels(document: JsonObject = DOCUMENT) -> JsonObject:
+    """Return a copy of ``document`` that advertises repository labels."""
+    return {
+        **document,
+        "definitions": {
+            **document["definitions"],
+            "Label": LABEL,
+        },
+        "paths": {
+            **document["paths"],
+            "/repos/{owner}/{repo}/labels": {
+                "get": {
+                    "operationId": "issueListLabels",
+                    "summary": "Get all of a repository's labels",
+                    "parameters": _repo_params([*PAGINATION]),
+                    "responses": {"200": {"description": "LabelList",
+                                          "schema": {"type": "array",
+                                                     "items": {"$ref": "#/definitions/Label"}}}},
+                },
+            },
+        },
+    }

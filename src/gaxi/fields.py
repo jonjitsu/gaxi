@@ -14,7 +14,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from gaxi import projection
-from gaxi.policy import Properties, fallback_projection, schema_field_names
+from gaxi.policy import (
+    Properties,
+    fallback_projection,
+    schema_field_names,
+    schema_property_names,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -36,7 +41,9 @@ def fields(
     if selected:
         projection.validate_fields(selected, items, declared)
         return list(selected)
-    chosen = _policy_projection(props, items, declared)
+    chosen = _policy_projection(
+        props, items, declared, schema_property_names(cap.success_response()),
+    )
     if chosen:
         return chosen
     observed = projection.observed_fields(items)
@@ -49,10 +56,16 @@ def _policy_projection(
     props: Properties,
     items: Sequence[JsonValue],
     declared: Sequence[str],
+    schema_props: Sequence[str],
 ) -> list[str]:
     if not props.projection:
         return []
     available = set(projection.observed_fields(items)) | set(declared)
-    if not available:
+    schema_heads = set(schema_props)
+    if not available and not schema_heads:
         return list(props.projection)
-    return [field for field in props.projection if field.split(".")[0] in available]
+    return [
+        field for field in props.projection
+        if field.split(".")[0] in available
+        or ("." in field and field.split(".")[0] in schema_heads)
+    ]

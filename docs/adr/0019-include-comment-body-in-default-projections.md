@@ -1,0 +1,3 @@
+# Include comment body in default projections
+
+`Comment` collections are the primary way agents read issue and pull-request discussion text; omitting `body` from the default projection forces a second `--fields` re-fetch on nearly every comment list call. `Comment` is therefore a documented exception to the list-default prohibition on verbose fields: the built-in projection is `id`, `user.login`, `body`, and `created_at`. The shared 160-character truncation contract (ADR 0008) applies to comment bodies in list output; truncation metadata names the row and field, and `--full` retrieves the complete text without changing the projection or format.

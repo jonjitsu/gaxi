@@ -12,7 +12,7 @@ layer that supplied it, so `gaxi capability` can report provenance:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from gaxi import policy_data
 
@@ -164,18 +164,27 @@ class Policy:
             props.set_once("projection", fallback_projection(names), "fallback")
 
 
-def schema_field_names(spec: ResponseSpec | None) -> list[str]:
-    """The scalar property names the advertised success response declares."""
+def _response_properties(spec: ResponseSpec | None) -> dict[str, Any]:
     if spec is None or not spec.schema:
-        return []
+        return {}
     schema = spec.schema
     if schema.get("type") == "array":
         schema = schema.get("items") or {}
-    properties = schema.get("properties") or {}
+    return schema.get("properties") or {}
+
+
+def schema_field_names(spec: ResponseSpec | None) -> list[str]:
+    """The scalar property names the advertised success response declares."""
     return [
-        name for name, value in properties.items()
-        if (value or {}).get("type") in {"string", "integer", "number", "boolean"}
+        name for name, value in _response_properties(spec).items()
+        if isinstance(value, dict)
+        and value.get("type") in {"string", "integer", "number", "boolean"}
     ]
+
+
+def schema_property_names(spec: ResponseSpec | None) -> list[str]:
+    """Every property name the advertised success response declares."""
+    return list(_response_properties(spec))
 
 
 def _fallback_entity(cap: Capability, response_kind: str | None) -> tuple[str, str]:

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Comment, pull request, and label default projections now include the field
+  callers most often need on those endpoints: `body` on comments (truncated per
+  the shared limit), `merged` on pull requests instead of `updated_at`, and
+  `exclusive` on labels. This removes the common second `--fields` re-fetch when
+  reading comment text, checking whether a closed PR merged, or reading label
+  exclusivity. Comment list defaults are a documented exception to the usual
+  list-default prohibition on `body` (ADR 0019).
+- Empty comment collections now keep the same four-field default header as
+  non-empty results, so `user.login` is not dropped when the response has no
+  rows.
+
 ## 1.3.0
 - Batch mutations are now discoverable without reading `--help`. A successful
   single-bodied create whose entity has a detail route suggests the same request
