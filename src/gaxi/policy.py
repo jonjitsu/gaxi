@@ -20,12 +20,14 @@ if TYPE_CHECKING:
     from collections.abc import Container, Iterable, Sequence
 
     from gaxi.capability import Capability, ResponseSpec
-    from gaxi.jsonshape import JsonObject
+    from gaxi.jsonshape import JsonObject, JsonValue
+    from gaxi.swagger import Description
 
 PRESENTATION_KEYS = ("entity", "entity_singular", "projection")
 OVERLAY_KEYS = (*PRESENTATION_KEYS, "confirmation", "retry", "response")
 
 IDENTIFIER_FIELDS = ("index", "id", "number", "sha", "login", "username", "uuid", "key")
+SCALAR_TYPES = frozenset({"string", "integer", "number", "boolean"})
 _LOGIN_SYNONYMS = ("login", "username", "org", "assignee", "collaborator", "user")
 FIELD_SYNONYMS: dict[str, tuple[str, ...]] = {
     "index": ("index", "number"),
@@ -185,6 +187,129 @@ def schema_field_names(spec: ResponseSpec | None) -> list[str]:
 def schema_property_names(spec: ResponseSpec | None) -> list[str]:
     """Every property name the advertised success response declares."""
     return list(_response_properties(spec))
+
+
+def entity_field_rows(
+    description: Description,
+    spec: ResponseSpec | None,
+    projection: Sequence[str] | None,
+) -> list[list[JsonValue]]:
+    """Every scalar or array field on the success entity, with projection flags."""
+    schema = _entity_schema(description, spec)
+    if schema is None:
+        return []
+    projected = set(projection or [])
+    seen: set[str] = set()
+    if spec is not None and spec.entity_ref:
+        seen.add(spec.entity_ref)
+    return [
+        [name, type_, name in projected]
+        for name, type_ in _entity_field_paths(description, schema, seen=seen)
+    ]
+
+
+def _entity_schema(
+    description: Description,
+    spec: ResponseSpec | None,
+) -> JsonObject | None:
+    if spec is None:
+        return None
+    if spec.entity_ref:
+        return _resolved_schema(description, {"$ref": f"#/definitions/{spec.entity_ref}"})
+    return _inline_entity_schema(description, spec.schema)
+
+
+def _resolved_schema(description: Description, node: JsonValue) -> JsonObject | None:
+    resolved = description.resolve(node)
+    return resolved if isinstance(resolved, dict) else None
+
+
+def _inline_entity_schema(
+    description: Description,
+    schema: JsonValue,
+) -> JsonObject | None:
+    if not isinstance(schema, dict):
+        return None
+    schema_type = schema.get("type")
+    if schema_type == "object":
+        return schema
+    if schema_type == "array":
+        return _resolved_schema(description, schema.get("items") or {})
+    return None
+
+
+def _schema_ref_name(node: JsonValue) -> str | None:
+    if isinstance(node, dict) and "$ref" in node:
+        ref = node["$ref"]
+        return ref.rsplit("/", 1)[-1] if isinstance(ref, str) else None
+    return None
+
+
+def _cyclic_object_field(prefix: str) -> list[tuple[str, str]]:
+    return [(prefix, "object")] if prefix else []
+
+
+def _entity_field_paths(
+    description: Description,
+    schema: JsonValue,
+    *,
+    prefix: str = "",
+    seen: set[str],
+) -> list[tuple[str, str]]:
+    schema = description.resolve(schema)
+    if not isinstance(schema, dict):
+        return []
+    properties = schema.get("properties") or {}
+    rows: list[tuple[str, str]] = []
+    for name, raw_prop in properties.items():
+        path = f"{prefix}.{name}" if prefix else name
+        rows.extend(_expand_entity_field(description, raw_prop, path, seen))
+    return rows
+
+
+def _expand_resolved_entity_field(
+    description: Description,
+    prop: JsonObject,
+    raw_prop: JsonValue,
+    path: str,
+    seen: set[str],
+) -> list[tuple[str, str]]:
+    type_ = prop.get("type")
+    if type_ in SCALAR_TYPES:
+        return [(path, str(type_))]
+    if type_ == "array":
+        return [(path, "array")]
+    if not _expandable_object(prop, raw_prop):
+        return [(path, str(type_) if type_ else "unknown")]
+    nested = _entity_field_paths(description, prop, prefix=path, seen=seen)
+    return nested or _cyclic_object_field(path)
+
+
+def _expand_entity_field(
+    description: Description,
+    raw_prop: JsonValue,
+    path: str,
+    seen: set[str],
+) -> list[tuple[str, str]]:
+    ref_name = _schema_ref_name(raw_prop)
+    if ref_name is not None:
+        if ref_name in seen:
+            return _cyclic_object_field(path)
+        child_seen = seen | {ref_name}
+        nested = _entity_field_paths(description, raw_prop, prefix=path, seen=child_seen)
+        return nested or _cyclic_object_field(path)
+    prop = description.resolve(raw_prop)
+    if not isinstance(prop, dict):
+        return [(path, "unknown")]
+    return _expand_resolved_entity_field(description, prop, raw_prop, path, seen)
+
+
+def _expandable_object(prop: JsonObject, raw_prop: JsonValue) -> bool:
+    return (
+        prop.get("type") == "object"
+        or _schema_ref_name(raw_prop) is not None
+        or bool(prop.get("properties"))
+    )
 
 
 def _fallback_entity(cap: Capability, response_kind: str | None) -> tuple[str, str]:

@@ -164,6 +164,64 @@ class CapabilityDetailTest(unittest.TestCase):
         assert code == 0
         assert "capabilities repos --page 2" in out
 
+    def test_capability_detail_lists_entity_fields_with_projection_flags(self) -> None:
+        code, out, _ = run_cli(
+            ["capability", "get:/repos/{owner}/{repo}/issues/{index}/comments"],
+        )
+        assert code == 0
+        assert "entity_fields[" in out
+        assert "id,integer,true" in out
+        assert "user.login,string,true" in out
+        assert "body,string,true" in out
+        assert "created_at,string,true" in out
+        assert "updated_at,string,false" in out
+        assert "assets,array,false" in out
+
+    def test_capability_detail_omits_entity_fields_without_an_entity_schema(self) -> None:
+        code, out, _ = run_cli(["capability", "delete:/repos/{owner}/{repo}/issues/comments/{id}"])
+        assert code == 0
+        assert "entity_fields[" not in out
+
+    def test_capability_detail_survives_cyclic_entity_schema_refs(self) -> None:
+        document = {
+            "swagger": "2.0",
+            "basePath": "/api/v1",
+            "paths": {
+                "/repos/{owner}/{repo}": {
+                    "get": {
+                        "operationId": "repoGet",
+                        "parameters": [
+                            {"name": "owner", "in": "path", "type": "string", "required": True},
+                            {"name": "repo", "in": "path", "type": "string", "required": True},
+                        ],
+                        "responses": {
+                            "200": {
+                                "description": "Repository",
+                                "schema": {"$ref": "#/definitions/Repository"},
+                            },
+                        },
+                    },
+                },
+            },
+            "definitions": {
+                "Repository": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "parent": {"$ref": "#/definitions/Repository"},
+                    },
+                },
+            },
+        }
+        code, out, _ = run_cli(
+            ["capability", "get:/repos/{owner}/{repo}"],
+            document=document,
+        )
+        assert code == 0
+        assert "entity_fields[" in out
+        assert "name,string," in out
+        assert "parent,object," in out
+
 
 class SetupTest(unittest.TestCase):
     def test_setup_requires_a_known_action(self) -> None:

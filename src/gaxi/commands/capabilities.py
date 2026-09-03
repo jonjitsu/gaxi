@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from gaxi.document import Aggregate, Document, Lines, Mapping, Scalar, Table
 from gaxi.naming import command
-from gaxi.policy import schema_field_names
+from gaxi.policy import entity_field_rows, schema_field_names
 from gaxi.suggestions import build, capabilities, capability, collect, lines
 
 if TYPE_CHECKING:
@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from gaxi.jsonshape import JsonObject, JsonValue
     from gaxi.policy import Properties
     from gaxi.session import Session
+    from gaxi.swagger import Description
 
 DEFAULT_LIMIT = 20
 SUMMARY_LIMIT = 160
@@ -110,6 +111,7 @@ def detail(session: Session, selector: str) -> Document:
         [[status, spec.kind, spec.entity_ref or ""]
          for status, spec in sorted(cap.responses.items())],
     ))
+    _attach_entity_fields(document, session.catalog.description, cap, props.projection)
     document.add("policy", Table(
         ["property", "value", "source"],
         [[name, _property_value(getattr(props, name)), props.sources.get(name, "fallback")]
@@ -123,6 +125,17 @@ def detail(session: Session, selector: str) -> Document:
 def _attach_help(document: Document, rendered: Lines | None) -> None:
     if rendered is not None:
         document.add("help", rendered)
+
+
+def _attach_entity_fields(
+    document: Document,
+    description: Description,
+    cap: Capability,
+    projection: Sequence[str] | None,
+) -> None:
+    rows = entity_field_rows(description, cap.success_response(), projection)
+    if rows:
+        document.add("entity_fields", Table(["name", "type", "projected"], rows))
 
 
 def _property_value(value: JsonValue) -> JsonValue:

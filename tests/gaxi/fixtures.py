@@ -86,8 +86,14 @@ DOCUMENT = {
         "Issue": ISSUE,
         "Comment": {
             "type": "object",
-            "properties": {"id": {"type": "integer"}, "body": {"type": "string"},
-                           "user": {"type": "object"}, "created_at": {"type": "string"}},
+            "properties": {
+                "id": {"type": "integer"},
+                "body": {"type": "string"},
+                "user": {"$ref": "#/definitions/User"},
+                "created_at": {"type": "string"},
+                "updated_at": {"type": "string"},
+                "assets": {"type": "array", "items": {"type": "object"}},
+            },
         },
         "User": {
             "type": "object",

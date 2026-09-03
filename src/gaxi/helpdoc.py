@@ -118,7 +118,7 @@ COMMANDS: dict[str, CommandSpec] = {
         "usage": "{exe} capability <key|operationId>",
         "summary":
             "Inspect one capability: inputs, responses, execution properties, policy source.",
-        "output": "capability object with inputs[] and policy[]",
+        "output": "capability object with inputs[], entity_fields[], and policy[]",
         "options": [],
         "examples": [
             "{exe} capability get:/repos/{owner}/{repo}/pulls",

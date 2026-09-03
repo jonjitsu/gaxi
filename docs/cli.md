@@ -199,7 +199,7 @@ Inspect one capability: inputs, responses, execution properties, policy source.
 gaxi capability <key|operationId>
 ```
 
-Output: capability object with inputs[] and policy[]
+Output: capability object with inputs[], entity_fields[], and policy[]
 
 Examples:
 

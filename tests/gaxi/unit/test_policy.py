@@ -1,8 +1,17 @@
 import unittest
 from typing import override
 
+from gaxi.capability import ResponseSpec
 from gaxi.catalog import Catalog
-from gaxi.policy import Policy, Properties, fallback_projection
+from gaxi.policy import (
+    Policy,
+    Properties,
+    _entity_field_paths,
+    _expand_entity_field,
+    entity_field_rows,
+    fallback_projection,
+)
+from gaxi.swagger import Description
 from tests.gaxi import support
 from tests.gaxi.fixtures import DOCUMENT, document_with_labels
 
@@ -47,6 +56,172 @@ class PolicyTest(unittest.TestCase):
         props = self.resolve("get:/repos/{owner}/{repo}/issues/{index}/comments")
         assert props.entity == "comments"
         assert props.projection == ["id", "user.login", "body", "created_at"]
+
+    def test_entity_field_rows_mark_the_default_projection(self) -> None:
+        cap = CATALOG.by_key["get:/repos/{owner}/{repo}/issues/{index}/comments"]
+        props = self.resolve(cap.key)
+        rows = entity_field_rows(CATALOG.description, cap.success_response(), props.projection)
+        assert rows == [
+            ["id", "integer", True],
+            ["body", "string", True],
+            ["user.login", "string", True],
+            ["user.full_name", "string", False],
+            ["user.is_admin", "boolean", False],
+            ["created_at", "string", True],
+            ["updated_at", "string", False],
+            ["assets", "array", False],
+        ]
+
+    def test_entity_field_rows_follow_inline_array_items_without_entity_ref(self) -> None:
+        description = Description({
+            "swagger": "2.0",
+            "definitions": {
+                "Gadget": {"type": "object", "properties": {"name": {"type": "string"}}},
+            },
+        })
+        spec = ResponseSpec(
+            status=200,
+            kind="collection",
+            schema={"type": "array", "items": {"$ref": "#/definitions/Gadget"}},
+        )
+        assert entity_field_rows(description, spec, ["name"]) == [["name", "string", True]]
+
+    def test_entity_field_rows_handle_unusual_property_shapes(self) -> None:
+        description = Description({
+            "swagger": "2.0",
+            "definitions": {
+                "Weird": {
+                    "type": "object",
+                    "properties": {
+                        "bad": "not-a-schema",
+                        "empty": {"type": "object"},
+                        "opaque": {"type": "file"},
+                    },
+                },
+            },
+        })
+        spec = ResponseSpec(
+            status=200,
+            kind="object",
+            schema={"$ref": "#/definitions/Weird"},
+            entity_ref="Weird",
+        )
+        assert entity_field_rows(description, spec, []) == [
+            ["bad", "unknown", False],
+            ["empty", "object", False],
+            ["opaque", "file", False],
+        ]
+
+    def test_entity_field_paths_ignore_non_object_nodes(self) -> None:
+        description = Description({"swagger": "2.0"})
+        assert _entity_field_paths(description, "not-an-object", seen=set()) == []
+
+    def test_entity_field_rows_stop_on_cyclic_schema_refs(self) -> None:
+        description = Description({
+            "swagger": "2.0",
+            "definitions": {
+                "Node": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "child": {"$ref": "#/definitions/Node"},
+                    },
+                },
+            },
+        })
+        spec = ResponseSpec(
+            status=200,
+            kind="object",
+            schema={"$ref": "#/definitions/Node"},
+            entity_ref="Node",
+        )
+        assert entity_field_rows(description, spec, ["name"]) == [
+            ["name", "string", True],
+            ["child", "object", False],
+        ]
+
+    def test_expand_entity_field_stops_when_ref_is_on_the_current_path(self) -> None:
+        description = Description({
+            "swagger": "2.0",
+            "definitions": {
+                "Node": {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"}},
+                },
+            },
+        })
+        seen = {"Node"}
+        assert _expand_entity_field(
+            description,
+            {"$ref": "#/definitions/Node"},
+            "wrapper",
+            seen,
+        ) == [("wrapper", "object")]
+        assert _expand_entity_field(
+            description,
+            {"$ref": "#/definitions/Node"},
+            "",
+            seen,
+        ) == []
+
+    def test_entity_field_rows_expand_sibling_refs_to_the_same_definition(self) -> None:
+        description = Description({
+            "swagger": "2.0",
+            "definitions": {
+                "User": {
+                    "type": "object",
+                    "properties": {
+                        "login": {"type": "string"},
+                        "full_name": {"type": "string"},
+                    },
+                },
+                "PullReviewComment": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "integer"},
+                        "path": {"type": "string"},
+                        "resolver": {"$ref": "#/definitions/User"},
+                        "user": {"$ref": "#/definitions/User"},
+                    },
+                },
+                "Issue": {
+                    "type": "object",
+                    "properties": {
+                        "number": {"type": "integer"},
+                        "assignee": {"$ref": "#/definitions/User"},
+                        "user": {"$ref": "#/definitions/User"},
+                    },
+                },
+            },
+        })
+        comment_spec = ResponseSpec(
+            status=200,
+            kind="object",
+            schema={"$ref": "#/definitions/PullReviewComment"},
+            entity_ref="PullReviewComment",
+        )
+        comment_rows = entity_field_rows(
+            description,
+            comment_spec,
+            ["id", "path", "user.login"],
+        )
+        assert ["user.login", "string", True] in comment_rows
+        assert ["resolver.login", "string", False] in comment_rows
+
+        issue_spec = ResponseSpec(
+            status=200,
+            kind="object",
+            schema={"$ref": "#/definitions/Issue"},
+            entity_ref="Issue",
+        )
+        issue_rows = entity_field_rows(description, issue_spec, ["user.login"])
+        assert ["user.login", "string", True] in issue_rows
+        assert ["assignee.login", "string", False] in issue_rows
+
+    def test_entity_field_rows_ignore_non_object_success_schemas(self) -> None:
+        description = Description({"swagger": "2.0"})
+        spec = ResponseSpec(status=200, kind="text", schema={"type": "string"})
+        assert entity_field_rows(description, spec, []) == []
 
     def test_label_projection_includes_exclusive(self) -> None:
         catalog = Catalog.from_document(document_with_labels(), origin=support.ORIGIN)

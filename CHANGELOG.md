@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- `gaxi capability` now lists each success-response entity's available fields in
+  `entity_fields[]`, with a `projected` flag for fields included in the default
+  projection, so callers can choose `--fields` correctly before the first
+  request instead of inferring the schema from live responses.
+- Entity-field walking in `gaxi capability` now tracks visited Swagger
+  definition refs and stops on cycles (for example `Repository.parent`), so
+  capabilities with recursive schemas no longer crash with `RecursionError`.
+- Entity-field cycle detection now scopes visited refs to the current path
+  instead of a shared set, so sibling `$ref`s to the same definition (for
+  example `resolver` and `user` on `PullReviewComment`) still list nested
+  fields such as `user.login` in the default projection.
 - Projected responses now list top-level response fields dropped by the active
   projection in `omitted[N]:` metadata, mirroring the existing `truncated[]`
   contract so callers can widen `--fields` on the first attempt instead of
