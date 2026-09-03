@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+
+## 1.3.0
 - Batch mutations are now discoverable without reading `--help`. A successful
   single-bodied create whose entity has a detail route suggests the same request
   carrying several bodies, placed directly after the `get <detail>` suggestion so
