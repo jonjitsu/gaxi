@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.4.0
+
 - Issue-dependency creation is now classified as an ordinary additive mutation
   (`confirmation: none`) rather than falling through to `unknown`, so linking two
   issues no longer demands `--allow-unknown`. The safeguard stays reserved for
