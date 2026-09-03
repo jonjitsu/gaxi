@@ -241,6 +241,33 @@ class MutationTest(unittest.TestCase):
         assert "- gaxi get /repos/acme/widgets/issues/42" in out
         assert json.loads(support.recorded(session)[0]["body"]) == {"title": "Broken deployment"}
 
+    def test_issue_dependency_defaults_owner_and_repo_from_path(self) -> None:
+        code, _out, session = run_cli(
+            [
+                "post",
+                "/repos/acme/widgets/issues/23/dependencies",
+                "index=22",
+                "--allow-unknown",
+            ],
+            responses=[json_response(
+                {"number": 23, "title": "Blocked", "state": "open", "updated_at": "t"},
+                status=201,
+            )],
+        )
+        assert code == 0
+        body = json.loads(support.recorded(session)[0]["body"])
+        assert body == {"index": 22, "owner": "acme", "repo": "widgets"}
+
+    def test_issue_dependency_allow_unknown_help_includes_path_defaulted_body(self) -> None:
+        code, out, session = run_cli(
+            ["post", "/repos/acme/widgets/issues/23/dependencies", "index=22"],
+        )
+        assert code == 1
+        assert "requires --allow-unknown" in out
+        assert "body:owner=acme" in out
+        assert "body:repo=widgets" in out
+        assert support.recorded(session) == []
+
     def test_dry_run_sends_nothing_and_shows_context(self) -> None:
         code, out, session = run_cli(
             ["delete", "/repos/acme/widgets/issues/comments/17", "--yes", "--dry-run"])
@@ -475,8 +502,8 @@ class SurfaceTest(unittest.TestCase):
     def test_capabilities_defaults_to_a_bounded_list(self) -> None:
         code, out, _ = run_cli(["capabilities"])
         assert code == 0
-        assert out.splitlines()[0] == "count: 19 of 19 total"
-        assert "capabilities[19]{method,path,summary,effect}:" in out
+        assert out.splitlines()[0] == "count: 20 of 20 total"
+        assert "capabilities[20]{method,path,summary,effect}:" in out
 
     def test_capability_reports_policy_provenance(self) -> None:
         code, out, _ = run_cli(["capability", "get:/repos/{owner}/{repo}/pulls"])

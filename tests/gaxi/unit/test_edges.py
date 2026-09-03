@@ -11,7 +11,7 @@ import pytest
 
 import gaxi.__main__
 from gaxi import jsonshape, repo_context
-from gaxi.binding import _as_query_text, bind
+from gaxi.binding import Binding, _as_query_text, _coerce, bind
 from gaxi.capability import Capability, Param
 from gaxi.catalog import Catalog
 from gaxi.classify import Classification
@@ -23,6 +23,7 @@ from gaxi.encode import _yaml_lines, to_yaml
 from gaxi.errors import UsageError
 from gaxi.jsonbody import _json_type_matches, body_properties
 from gaxi.options import Options, RequestOptions
+from gaxi.path_body import apply_path_body_defaults
 from gaxi.planner import (
     Planner,
     _identifier_from_payload,
@@ -146,6 +147,41 @@ class PlannerEdgeTest(unittest.TestCase):
         planner = Planner(CATALOG, cap, "/repos/acme/widgets/issues", binding)
         assert "body:title=Ship" in planner.retry()
         assert "labels" not in planner.retry()
+
+    def test_retry_carries_path_defaulted_body_fields(self) -> None:
+        cap = CATALOG.by_key["post:/repos/{owner}/{repo}/issues/{index}/dependencies"]
+        binding = bind(
+            cap,
+            ["index=22"],
+            path_values={"owner": "acme", "repo": "widgets", "index": "23"},
+        )
+        planner = Planner(
+            CATALOG,
+            cap,
+            "/repos/acme/widgets/issues/23/dependencies",
+            binding,
+        )
+        retry = planner.retry(["--allow-unknown"])
+        assert "body:index=22" in retry
+        assert "body:owner=acme" in retry
+        assert "body:repo=widgets" in retry
+
+    def test_retry_placeholders_name_unbound_body_properties(self) -> None:
+        cap = CATALOG.by_key["post:/repos/{owner}/{repo}/issues/{index}/dependencies"]
+        binding = Binding()
+        apply_path_body_defaults(
+            cap,
+            binding,
+            {"owner": "acme", "repo": "widgets", "index": "23"},
+            _coerce,
+        )
+        planner = Planner(
+            CATALOG,
+            cap,
+            "/repos/acme/widgets/issues/23/dependencies",
+            binding,
+        )
+        assert 'body:index="<index>"' in planner.retry(["--allow-unknown"])
 
     def test_batch_input_json_is_carried_into_a_retry(self) -> None:
         payload = '[{"title": "a"}, {"title": "b"}]'

@@ -7,13 +7,14 @@ import pytest
 from gaxi.binding import Binding, bind, split_assignment
 from gaxi.catalog import Catalog
 from gaxi.errors import UsageError
-from gaxi.jsonbody import validate_json_body
+from gaxi.jsonbody import validate_binding_body_required, validate_json_body
 from tests.gaxi import support
 from tests.gaxi.fixtures import DOCUMENT
 
 CATALOG = Catalog.from_document(DOCUMENT, origin=support.ORIGIN)
 LIST_PULLS = CATALOG.by_key["get:/repos/{owner}/{repo}/pulls"]
 CREATE_ISSUE = CATALOG.by_key["post:/repos/{owner}/{repo}/issues"]
+ISSUE_DEPENDENCY = CATALOG.by_key["post:/repos/{owner}/{repo}/issues/{index}/dependencies"]
 
 
 class AssignmentTest(unittest.TestCase):
@@ -88,3 +89,22 @@ class JsonBodyTest(unittest.TestCase):
         with pytest.raises(UsageError) as caught:
             validate_json_body(CREATE_ISSUE, '{"title": "x", "labels": true}')
         assert "labels expects array" in caught.value.message
+
+    def test_binding_body_required_skips_non_object_bodies(self) -> None:
+        binding = Binding()
+        binding.body = "literal"
+        validate_binding_body_required(ISSUE_DEPENDENCY, binding)
+
+    def test_binding_body_required_skips_non_object_batch_elements(self) -> None:
+        binding = Binding()
+        binding.batch_bodies = [{"index": 22, "owner": "acme"}, "skip-me"]
+        validate_binding_body_required(ISSUE_DEPENDENCY, binding)
+
+    def test_input_json_required_is_checked_after_path_defaults(self) -> None:
+        binding = bind(
+            ISSUE_DEPENDENCY,
+            [],
+            input_json='{"index": 22}',
+            path_values={"owner": "trading", "repo": "lab3", "index": "23"},
+        )
+        assert binding.body == {"index": 22, "owner": "trading", "repo": "lab3"}

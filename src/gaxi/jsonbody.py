@@ -14,6 +14,7 @@ from gaxi.errors import UsageError
 from gaxi.suggestions import build, capability
 
 if TYPE_CHECKING:
+    from gaxi.binding import Binding
     from gaxi.capability import Capability
     from gaxi.jsonshape import JsonObject, JsonValue
 
@@ -66,6 +67,7 @@ def validate_json_value(
     payload: JsonValue,
     *,
     index: int | None = None,
+    check_required: bool = True,
 ) -> JsonValue:
     """Validate one parsed JSON value against the capability's declared body schema."""
     properties = body_properties(cap)
@@ -78,11 +80,31 @@ def validate_json_value(
     if body_schema(cap).get("additionalProperties") is not True:
         _reject_unknown(cap, payload, properties)
     _check_property_types(cap, payload, properties)
-    _check_required_properties(cap, payload, properties, index=index)
+    if check_required:
+        _check_required_properties(cap, payload, properties, index=index)
     return payload
 
 
-def parse_input_json_bodies(cap: Capability, text: str) -> InputJsonParse:
+def validate_binding_body_required(cap: Capability, binding: Binding) -> None:
+    """Validate required body properties on the bound body after path defaults."""
+    properties = body_properties(cap)
+    if not properties:
+        return
+    if binding.is_batch() and binding.batch_bodies is not None:
+        for index, body in enumerate(binding.batch_bodies):
+            if isinstance(body, dict):
+                _check_required_properties(cap, body, properties, index=index)
+        return
+    if isinstance(binding.body, dict):
+        _check_required_properties(cap, binding.body, properties)
+
+
+def parse_input_json_bodies(
+    cap: Capability,
+    text: str,
+    *,
+    check_required: bool = True,
+) -> InputJsonParse:
     """Parse `--input-json` as one body or a batch of bodies.
 
     A JSON array supplies multiple bodies and preserves batch shape even when it
@@ -96,16 +118,30 @@ def parse_input_json_bodies(cap: Capability, text: str) -> InputJsonParse:
     try:
         payload = json.loads(text)
     except json.JSONDecodeError:
-        return InputJsonParse(_parse_ndjson_bodies(cap, text), is_batch=True)
-    if isinstance(payload, list):
         return InputJsonParse(
-            [validate_json_value(cap, item, index=index) for index, item in enumerate(payload)],
+            _parse_ndjson_bodies(cap, text, check_required=check_required),
             is_batch=True,
         )
-    return InputJsonParse([validate_json_value(cap, payload)], is_batch=False)
+    if isinstance(payload, list):
+        return InputJsonParse(
+            [
+                validate_json_value(cap, item, index=index, check_required=check_required)
+                for index, item in enumerate(payload)
+            ],
+            is_batch=True,
+        )
+    return InputJsonParse(
+        [validate_json_value(cap, payload, check_required=check_required)],
+        is_batch=False,
+    )
 
 
-def _parse_ndjson_bodies(cap: Capability, text: str) -> list[JsonValue]:
+def _parse_ndjson_bodies(
+    cap: Capability,
+    text: str,
+    *,
+    check_required: bool = True,
+) -> list[JsonValue]:
     """Parse one JSON object per non-empty line."""
     bodies: list[JsonValue] = []
     for line_number, line in enumerate(text.splitlines(), start=1):
@@ -120,7 +156,14 @@ def _parse_ndjson_bodies(cap: Capability, text: str) -> list[JsonValue]:
                 msg,
                 details=[("line", str(line_number)), ("position", str(exc.pos))],
             ) from exc
-        bodies.append(validate_json_value(cap, payload, index=len(bodies)))
+        bodies.append(
+            validate_json_value(
+                cap,
+                payload,
+                index=len(bodies),
+                check_required=check_required,
+            ),
+        )
     return bodies
 
 

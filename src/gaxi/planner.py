@@ -12,6 +12,7 @@ import re
 from typing import TYPE_CHECKING
 
 from gaxi.http import parse_int
+from gaxi.jsonbody import body_properties
 from gaxi.naming import command, shell_quote
 from gaxi.policy import FIELD_SYNONYMS, IDENTIFIER_FIELDS
 from gaxi.suggestions import auth_add, batch_bodies, capability, collect
@@ -70,9 +71,27 @@ class Planner:
             ]
         return pairs
 
+    def _placeholder_assignments(self) -> list[tuple[str, JsonValue]]:
+        """Runnable placeholders for body properties the caller has not bound yet."""
+        if self.binding.is_batch() or self.binding.body_is_raw:
+            return []
+        declared = body_properties(self.cap)
+        if not declared:
+            return []
+        supplied = (
+            set(self.binding.body)
+            if isinstance(self.binding.body, dict)
+            else set()
+        )
+        return [
+            (f"body:{name}", f"<{name}>")
+            for name in sorted(declared)
+            if name not in supplied
+        ]
+
     def retry(self, extra_options: Iterable[str] = ()) -> str:
         """The exact command that repeats this request with added options."""
-        assignments = self._fixed_assignments(skip=())
+        assignments = self._fixed_assignments(skip=()) + self._placeholder_assignments()
         options = list(extra_options)
         if (input_json := self._input_json_option()) is not None:
             options.insert(0, input_json)

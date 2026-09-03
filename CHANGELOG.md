@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Unbound body properties that share a name with a resolved path parameter now
+  default from that path value before a request is sent, except identifier
+  fields such as `index` that often refer to a different entity in the body.
+  Issue-dependency creation no longer forwards empty `owner`/`repo` values and
+  receives a misleading repository 404. Mutation retry suggestions now carry
+  path-defaulted body fields and name any remaining unbound body properties as
+  `<placeholder>` values so the help line is runnable.
 - Comment, pull request, and label default projections now include the field
   callers most often need on those endpoints: `body` on comments (truncated per
   the shared limit), `merged` on pull requests instead of `updated_at`, and

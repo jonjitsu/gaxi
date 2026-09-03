@@ -14,7 +14,13 @@ from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, urlencode
 
 from gaxi.errors import UsageError
-from gaxi.jsonbody import body_properties, body_schema, parse_input_json_bodies
+from gaxi.jsonbody import (
+    body_properties,
+    body_schema,
+    parse_input_json_bodies,
+    validate_binding_body_required,
+)
+from gaxi.path_body import apply_path_body_defaults
 from gaxi.suggestions import build, capability
 
 if TYPE_CHECKING:
@@ -264,6 +270,7 @@ def bind(
     path_query: str = "",
     input_json: str | None = None,
     *,
+    path_values: dict[str, str] | None = None,
     apply_pagination: bool = True,
 ) -> Binding:
     """Bind caller assignments to the resolved capability's declared inputs."""
@@ -278,6 +285,9 @@ def bind(
             _bind_param_input(cap, binding, state, resolved, (name, value, source))
 
     _attach_body(cap, binding, state, input_json)
+    apply_path_body_defaults(cap, binding, path_values or {}, _coerce)
+    if input_json is not None:
+        validate_binding_body_required(cap, binding)
     _check_required(cap, binding, state.supplied)
     if apply_pagination:
         _apply_pagination(cap, binding)
@@ -295,7 +305,7 @@ def _attach_body(
         if state.supplied:
             msg = "--input-json cannot be combined with body assignments"
             raise UsageError(msg, details=[("inputs", ", ".join(sorted(set(state.supplied))))])
-        parsed = parse_input_json_bodies(cap, input_json)
+        parsed = parse_input_json_bodies(cap, input_json, check_required=False)
         if parsed.is_batch:
             binding.batch_bodies = parsed.bodies
         else:
@@ -340,7 +350,7 @@ def _supplied_body_names(binding: Binding, assigned: Sequence[str]) -> set[str]:
             if isinstance(body, dict):
                 names.update(body)
         return names
-    if binding.body_is_raw and isinstance(binding.body, dict):
+    if isinstance(binding.body, dict):
         return set(binding.body)
     return set(assigned)
 

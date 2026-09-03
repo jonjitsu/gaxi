@@ -120,6 +120,66 @@ class BindingTest(unittest.TestCase):
             bind(UPLOAD, ["name=asset.zip"])
         assert "form:attachment" in caught.value.message
 
+    def test_unbound_body_properties_default_from_path_values(self) -> None:
+        cap = CATALOG.by_key["post:/repos/{owner}/{repo}/issues/{index}/dependencies"]
+        binding = bind(
+            cap,
+            ["index=22"],
+            path_values={"owner": "trading", "repo": "lab3", "index": "23"},
+        )
+        assert binding.body == {"index": 22, "owner": "trading", "repo": "lab3"}
+
+    def test_path_defaults_do_not_override_supplied_body_values(self) -> None:
+        cap = CATALOG.by_key["post:/repos/{owner}/{repo}/issues/{index}/dependencies"]
+        binding = bind(
+            cap,
+            ["body:owner=other", "index=22"],
+            path_values={"owner": "trading", "repo": "lab3", "index": "23"},
+        )
+        assert binding.body == {"owner": "other", "index": 22, "repo": "lab3"}
+
+    def test_identifier_body_properties_are_not_defaulted_from_path(self) -> None:
+        cap = CATALOG.by_key["post:/repos/{owner}/{repo}/issues/{index}/dependencies"]
+        with pytest.raises(UsageError) as caught:
+            bind(
+                cap,
+                [],
+                path_values={"owner": "trading", "repo": "lab3", "index": "23"},
+            )
+        assert "body:index" in caught.value.message
+
+    def test_path_defaults_apply_to_input_json_bodies(self) -> None:
+        cap = CATALOG.by_key["post:/repos/{owner}/{repo}/issues/{index}/dependencies"]
+        binding = bind(
+            cap,
+            [],
+            input_json='{"index": 22}',
+            path_values={"owner": "trading", "repo": "lab3", "index": "23"},
+        )
+        assert binding.body == {"index": 22, "owner": "trading", "repo": "lab3"}
+
+    def test_path_defaults_apply_to_batch_input_json_bodies(self) -> None:
+        cap = CATALOG.by_key["post:/repos/{owner}/{repo}/issues/{index}/dependencies"]
+        binding = bind(
+            cap,
+            [],
+            input_json='[{"index": 22}, {"index": 21}]',
+            path_values={"owner": "trading", "repo": "lab3", "index": "23"},
+        )
+        assert binding.batch_bodies == [
+            {"index": 22, "owner": "trading", "repo": "lab3"},
+            {"index": 21, "owner": "trading", "repo": "lab3"},
+        ]
+
+    def test_unrelated_mutations_keep_body_none_without_assignments(self) -> None:
+        cap = CATALOG.by_key["post:/repos/{owner}/{repo}/issues"]
+        binding = bind(
+            cap,
+            [],
+            path_values={"owner": "trading", "repo": "lab3"},
+        )
+        assert binding.body is None
+
 
 def _ambiguous() -> Capability:
     document = {

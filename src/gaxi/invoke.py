@@ -135,13 +135,14 @@ def _resolve_invocation(
             help_commands=build(command(method, _suggested_path(session, raw_path))),
         )
     catalog = session.catalog
-    cap, _path_values = catalog.resolve(method, path, request.selector)
+    cap, path_values = catalog.resolve(method, path, request.selector)
     props = session.policy.resolve(cap)
     binding = bind(
         cap,
         assignments,
         path_query,
         request.input_json,
+        path_values=path_values,
         apply_pagination=apply_pagination,
     )
     planner = Planner(catalog, cap, path, binding, session)

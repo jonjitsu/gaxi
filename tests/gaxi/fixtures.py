@@ -109,6 +109,15 @@ DOCUMENT = {
             "type": "object",
             "properties": {"title": {"type": "string"}, "state": {"type": "string"}},
         },
+        "IssueMeta": {
+            "type": "object",
+            "required": ["owner", "index"],
+            "properties": {
+                "index": {"type": "integer"},
+                "owner": {"type": "string"},
+                "repo": {"type": "string"},
+            },
+        },
         "SearchResults": {
             "type": "object",
             "properties": {"ok": {"type": "boolean"},
@@ -206,6 +215,18 @@ DOCUMENT = {
                 "parameters": _repo_params([
                     {"name": "index", "in": "path", "type": "integer", "required": True}]),
                 "responses": {"204": {"$ref": "#/responses/empty"}},
+            },
+        },
+        "/repos/{owner}/{repo}/issues/{index}/dependencies": {
+            "post": {
+                "operationId": "issueCreateIssueDependencies",
+                "summary": "Make the issue in the url depend on the issue in the form.",
+                "parameters": _repo_params([
+                    {"name": "index", "in": "path", "type": "integer", "required": True},
+                    {"name": "body", "in": "body",
+                     "schema": {"$ref": "#/definitions/IssueMeta"}}]),
+                "responses": {"201": {"description": "Issue",
+                                      "schema": {"$ref": "#/definitions/Issue"}}},
             },
         },
         "/repos/{owner}/{repo}/issues/{index}/comments": {
