@@ -14,3 +14,4 @@ dist/
 htmlcov/
 /result
 /result-*
+.*env
