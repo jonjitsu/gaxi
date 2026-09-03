@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from gaxi.document import Aggregate, Document, Mapping, Scalar, Table
+from gaxi.document import Aggregate, CommaList, Document, Mapping, Scalar, Table
 from gaxi.suggestions import lines as suggestion_lines
 from gaxi.suggestions import suppressed
 
@@ -22,7 +22,7 @@ def _cell(value: JsonValue, *, truncated: bool) -> Scalar:
     return Scalar(value, quoted=truncated) if truncated else Scalar(value)
 
 
-def collection(
+def collection(  # noqa: PLR0913
     entity: str,
     fields: Sequence[str],
     rows: Iterable[Iterable[tuple[JsonValue, bool]]],
@@ -31,6 +31,7 @@ def collection(
     total: int | str | None = None,
     page: int | None = None,
     truncations: Iterable[tuple[int, str, int]] = (),
+    omitted: Sequence[str] = (),
     help_commands: Iterable[str] = (),
 ) -> Document:
     """`count:` aggregate, then a named typed table."""
@@ -47,6 +48,8 @@ def collection(
             ["row", "field", "characters"],
             [list(entry) for entry in truncations],
         ))
+    if omitted:
+        document.add("omitted", CommaList(omitted))
     _add_help(document, help_commands)
     return document
 
@@ -55,6 +58,7 @@ def detail(
     entity: str,
     pairs: Iterable[tuple[str, JsonValue, bool]],
     truncations: Iterable[tuple[str, int]] = (),
+    omitted: Sequence[str] = (),
     help_commands: Iterable[str] = (),
 ) -> Document:
     """A named detail object without the meaningless `count: 1` aggregate."""
@@ -68,6 +72,8 @@ def detail(
             ["field", "characters"],
             [list(entry) for entry in truncations],
         ))
+    if omitted:
+        document.add("omitted", CommaList(omitted))
     _add_help(document, help_commands)
     return document
 

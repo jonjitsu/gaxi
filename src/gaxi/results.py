@@ -83,6 +83,7 @@ def render_batch_collection(inv: Invocation, classification: Classification) -> 
             *_batch_truncation_help(inv.planner, items, truncations),
             *help_commands,
         )
+    omitted = projection.omitted_fields(items, fields)
     document = render.collection(
         inv.props.entity or "results",
         fields,
@@ -90,6 +91,7 @@ def render_batch_collection(inv: Invocation, classification: Classification) -> 
         len(items),
         total=classification.total,
         truncations=truncations,
+        omitted=omitted,
         help_commands=help_commands,
     )
     return Outcome(document)
@@ -251,6 +253,7 @@ def _collection_document(inv: Invocation, classification: Classification) -> Doc
     )
     if truncations:
         help_commands = prepend(inv.planner.fields_full(fields), *help_commands)
+    omitted = projection.omitted_fields(items, fields)
     return render.collection(
         inv.props.entity or "results",
         fields,
@@ -259,6 +262,7 @@ def _collection_document(inv: Invocation, classification: Classification) -> Doc
         total=classification.total,
         page=classification.page,
         truncations=truncations,
+        omitted=omitted,
         help_commands=help_commands,
     )
 
@@ -269,6 +273,7 @@ def _detail_document(inv: Invocation, classification: Classification) -> Documen
     items = [value] if isinstance(value, dict) else []
     fields = resolve_fields(inv.cap, inv.props, items, request.fields)
     pairs, truncations = projection.project_object(value, fields, full=request.full)
+    omitted = projection.omitted_fields(items, fields)
     help_commands = inv.planner.for_detail(classification, effect=inv.props.effect)
     if truncations:
         help_commands = prepend(inv.planner.fields_full(fields), *help_commands)
@@ -276,6 +281,7 @@ def _detail_document(inv: Invocation, classification: Classification) -> Documen
         inv.props.entity_singular or inv.props.entity or "result",
         pairs,
         truncations=truncations,
+        omitted=omitted,
         help_commands=help_commands,
     )
 

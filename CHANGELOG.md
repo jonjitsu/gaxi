@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Projected responses now list top-level response fields dropped by the active
+  projection in `omitted[N]:` metadata, mirroring the existing `truncated[]`
+  contract so callers can widen `--fields` on the first attempt instead of
+  discovering missing fields only after inspection. Each omitted field name is
+  escaped for TOON so commas, quotes, and control characters cannot corrupt the
+  compact comma-separated line.
 - Unbound body properties that share a name with a resolved path parameter now
   default from that path value before a request is sent, except identifier
   fields such as `index` that often refer to a different entity in the body.

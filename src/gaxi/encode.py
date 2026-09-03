@@ -5,7 +5,17 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from gaxi.document import UNKNOWN, Aggregate, Document, Lines, Mapping, Node, Scalar, Table
+from gaxi.document import (
+    UNKNOWN,
+    Aggregate,
+    CommaList,
+    Document,
+    Lines,
+    Mapping,
+    Node,
+    Scalar,
+    Table,
+)
 
 if TYPE_CHECKING:
     from gaxi.jsonshape import JsonObject, JsonValue
@@ -90,6 +100,12 @@ def _item_lines(key: str, node: Lines, depth: int) -> list[str]:
     return lines
 
 
+def _comma_list_lines(key: str, node: CommaList, depth: int) -> list[str]:
+    pad = INDENT * depth
+    joined = ", ".join(format_value(item) for item in node.items)
+    return [f"{pad}{key}[{len(node.items)}]: {joined}"]
+
+
 def _node_lines(key: str, node: Node, depth: int) -> list[str]:
     pad = INDENT * depth
     if isinstance(node, Aggregate):
@@ -102,6 +118,8 @@ def _node_lines(key: str, node: Node, depth: int) -> list[str]:
         return _table_lines(key, node, depth)
     if isinstance(node, Lines):
         return _item_lines(key, node, depth)
+    if isinstance(node, CommaList):
+        return _comma_list_lines(key, node, depth)
     msg = f"unsupported node: {type(node).__name__}"
     raise TypeError(msg)
 
@@ -137,6 +155,8 @@ def _plain(node: Node) -> JsonValue:
     if isinstance(node, Table):
         return _plain_table(node)
     if isinstance(node, Lines):
+        return list(node.items)
+    if isinstance(node, CommaList):
         return list(node.items)
     msg = f"unsupported node: {type(node).__name__}"
     raise TypeError(msg)

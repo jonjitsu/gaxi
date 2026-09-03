@@ -89,6 +89,8 @@ def run(session: Session) -> str:
         "results emit `count: 0` and a zero-row table."),
         ("- Strings are truncated at 160 characters with `truncated[]` metadata; use "
         "`--fields` and `--full` to read a complete value."),
+        ("- Projections list dropped response fields in `omitted[]`; use `--fields` to "
+        "include them."),
         ("- Failures are structured on stdout with exit 1; validation failures exit 2 "
         "before any request is sent."),
         "- `help[]` lists the next executable commands.",

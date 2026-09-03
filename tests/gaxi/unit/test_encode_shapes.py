@@ -4,7 +4,7 @@ import unittest
 
 import pytest
 
-from gaxi.document import Aggregate, Document, Lines, Mapping, Node, Scalar, Table
+from gaxi.document import Aggregate, CommaList, Document, Lines, Mapping, Node, Scalar, Table
 from gaxi.encode import encode, format_value, to_json, to_toon, to_yaml
 
 
@@ -42,6 +42,41 @@ class NestingTest(unittest.TestCase):
         document = Document().add("help", Lines(["one", "two"]))
         assert to_toon(document) == "help[2]:\n  - one\n  - two"
         assert to_yaml(document) == 'help:\n  - "one"\n  - "two"'
+
+    def test_comma_lists_render_on_one_line(self) -> None:
+        document = Document().add("omitted", CommaList(["body", "created_at"]))
+        assert to_toon(document) == "omitted[2]: body, created_at"
+        assert to_yaml(document) == 'omitted:\n  - "body"\n  - "created_at"'
+
+    def test_comma_lists_escape_delimiters_and_control_characters(self) -> None:
+        document = Document().add(
+            "omitted",
+            CommaList(["two,fields", "line\nbreak", "tab\there"]),
+        )
+        assert to_toon(document) == (
+            'omitted[3]: "two,fields", "line\\nbreak", "tab\\there"'
+        )
+        assert to_yaml(document) == (
+            'omitted:\n  - "two,fields"\n  - "line\\nbreak"\n  - "tab\\there"'
+        )
+
+    def test_comma_lists_quote_primitive_looking_field_names(self) -> None:
+        document = Document().add(
+            "omitted",
+            CommaList(["true", "42", "null", "false", "-", ""]),
+        )
+        assert to_toon(document) == (
+            'omitted[6]: "true", "42", "null", "false", "-", ""'
+        )
+        assert to_yaml(document) == (
+            'omitted:\n'
+            '  - "true"\n'
+            '  - "42"\n'
+            '  - "null"\n'
+            '  - "false"\n'
+            '  - "-"\n'
+            '  - ""'
+        )
 
 
 class ScalarTest(unittest.TestCase):

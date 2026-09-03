@@ -54,6 +54,13 @@ class Lines(Node):
         self.items = list(items)
 
 
+class CommaList(Node):
+    """A compact comma-separated list rendered as `name[N]: item1, item2`."""
+
+    def __init__(self, items: Iterable[str]) -> None:
+        self.items = list(items)
+
+
 class Aggregate(Node):
     """The pre-computed `count:` aggregate for a collection.
 

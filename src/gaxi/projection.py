@@ -77,6 +77,19 @@ def observed_fields(items: Iterable[JsonValue]) -> list[str]:
     return names
 
 
+def omitted_fields(
+    items: Sequence[JsonValue],
+    projection: Sequence[str],
+) -> list[str]:
+    """Top-level response fields present in items but not covered by the projection."""
+    projected_heads = {_field_head(field) for field in projection}
+    return [
+        name
+        for name in observed_fields(items)
+        if name not in projected_heads
+    ]
+
+
 def _field_head(field: str) -> str:
     return field.split(".", maxsplit=1)[0]
 

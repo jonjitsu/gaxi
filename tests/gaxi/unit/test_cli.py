@@ -37,6 +37,7 @@ class CollectionTest(unittest.TestCase):
             "  41,Fix race,open,false",
             "  37,Update docs,open,false",
         ]
+        assert "omitted[2]: updated_at, body" in out
         assert "- gaxi get /repos/acme/widgets/pulls/<number>" in out
         assert session.requests == 1
 
@@ -118,12 +119,30 @@ class ProjectionTest(unittest.TestCase):
         assert "did_you_mean" not in out
 
     def test_dotted_paths_select_nested_scalars(self) -> None:
-        rows = [{"id": 3, "user": {"login": "alice"}, "created_at": "t"}]
+        rows = [{"id": 3, "user": {"login": "alice"}, "created_at": "t", "body": "hi"}]
         _, out, _ = run_cli(["get", "/repos/acme/widgets/issues/42/comments",
                              "--fields", "id,user.login"],
                             responses=[json_response(rows)])
         assert "comments[1]{id,user.login}:" in out
         assert "  3,alice" in out
+        assert "omitted[2]: created_at, body" in out
+
+    def test_omitted_fields_are_not_reported_when_everything_is_projected(self) -> None:
+        _, out, _ = run_cli(["get", "/repos/acme/widgets/issues/42/comments"],
+                            responses=[json_response([
+                                {"id": 3, "user": {"login": "alice"}, "body": "Ship it",
+                                 "created_at": "2026-08-29T18:12:00Z"},
+                            ])])
+        assert "omitted[" not in out
+
+    def test_detail_omission_lists_fields_not_in_projection(self) -> None:
+        _, out, _ = run_cli(
+            ["get", "/repos/acme/widgets/issues/42",
+             "--fields", "number,body"],
+            responses=[json_response({"number": 42, "body": "b", "title": "Fix"})],
+        )
+        assert "omitted[1]: title" in out
+        assert "--fields number,body,title" not in out
 
     def test_comment_default_projection_includes_body(self) -> None:
         rows = [{"id": 3, "user": {"login": "alice"}, "body": "Ship it",
@@ -195,7 +214,8 @@ class TruncationTest(unittest.TestCase):
                                                       "title": "t"})])
         assert self.LONG in out
         assert "truncated[" not in out
-        assert "title" not in out
+        assert "omitted[1]: title" in out
+        assert "  title:" not in out
 
     def test_collection_truncation_identifies_the_row(self) -> None:
         rows = [dict(PULLS[0]), dict(PULLS[1], body=self.LONG)]

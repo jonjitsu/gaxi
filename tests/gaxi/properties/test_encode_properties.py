@@ -7,7 +7,8 @@ import json
 from hypothesis import given
 from hypothesis import strategies as st
 
-from gaxi.encode import format_value
+from gaxi.document import CommaList, Document
+from gaxi.encode import format_value, to_toon
 
 scalar_text = st.text(
     alphabet=st.characters(exclude_categories=("Cs", "Cc")) | st.sampled_from("\n\r\t"),
@@ -35,3 +36,12 @@ def test_row_cells_containing_a_delimiter_are_quoted(value: str) -> None:
 @given(value=st.integers() | st.booleans() | st.none())
 def test_non_strings_are_never_quoted(value: int | bool | None) -> None:
     assert not format_value(value).startswith('"')
+
+
+@given(items=st.lists(scalar_text, min_size=1, max_size=8))
+def test_comma_list_items_are_escaped(items: list[str]) -> None:
+    rendered = to_toon(Document().add("omitted", CommaList(items)))
+    assert "\n" not in rendered.split("\n", 1)[0]
+    assert "\r" not in rendered.split("\n", 1)[0]
+    for item in items:
+        assert format_value(item) in rendered
