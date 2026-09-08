@@ -82,10 +82,12 @@ records it, and the changelog heading names it; the pipeline moves all three
 together.
 
 Publishing the tag mirrors the release to the public GitHub repository, so the
-changelog section written here is what appears on both forges. The mirror is a
-separate workflow from the tagging one: by the time it runs the canonical tag
-exists, so a failure there is re-run on its own and never leaves a release half
-finished.
+changelog section written here is what appears on both forges. The mirror also
+builds `gaxi-<version>-py3-none-any.whl` from the tagged tree and attaches it to
+the GitHub release, so a consumer can depend on an immutable, hashable artefact
+rather than a Git revision. The mirror is a separate workflow from the tagging
+one: by the time it runs the canonical tag exists, so a failure there is re-run
+on its own and never leaves a release half finished.
 
 ## Repository integration
 

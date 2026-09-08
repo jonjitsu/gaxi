@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- The `python-codeforge` quality gate moves to `1.1.0` and is now installed from
+  the published GitHub release wheel rather than a Git tag. A Git dependency has
+  no distributable artefact to hash, so `uv export` could not emit hashes for it
+  and a strict dependency audit could not cover the gate's own tree; the release
+  wheel is immutable and `uv.lock` now records its SHA-256. The tag pin is
+  unchanged in spirit — the URL names the same version — so the gate itself
+  behaves as before.
+- `release-mirror` now builds `gaxi-<version>-py3-none-any.whl` from the tagged
+  tree and attaches it to the GitHub release, the same way Codeforge publishes
+  its own. Consumers of `gaxi` gain what this repository just gained from
+  Codeforge: a hashable pin instead of a Git revision. The wheel's filename
+  carries the version declared in `pyproject.toml`, so a tag that disagrees with
+  the declared version fails the build step rather than publishing a mislabelled
+  asset.
+
 ## 1.4.0
 
 - Issue-dependency creation is now classified as an ordinary additive mutation

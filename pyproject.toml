@@ -15,9 +15,13 @@ dependencies = []
 gaxi = "gaxi.cli:main"
 
 [dependency-groups]
-dev = [
-  "python-codeforge @ git+https://github.com/jonjitsu/python-codeforge@1.0.0",
-]
+dev = ["python-codeforge"]
+
+[tool.uv.sources]
+# The release wheel, not a Git dependency: it is an immutable, hashable artefact,
+# so `uv export` can emit hashes and `pip-audit --strict` can audit the gate's own
+# dependency tree. Bump the version in both halves of the URL together.
+python-codeforge = { url = "https://github.com/jonjitsu/python-codeforge/releases/download/1.1.0/python_codeforge-1.1.0-py3-none-any.whl" }
 
 [tool.setuptools]
 package-dir = {"" = "src"}

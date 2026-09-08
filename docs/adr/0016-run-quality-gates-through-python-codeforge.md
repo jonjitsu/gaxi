@@ -1,11 +1,14 @@
 # Run quality gates through python-codeforge
 
 The repository's gates are the reusable Invoke tasks published as
-`python-codeforge`, pinned at tag `1.0.0` in the `dev` dependency group and exposed
-through a two-line `tasks.py`. `uv run invoke verify` is the gate: Codeforge's
-`check` (hygiene, lint, strict typing, dead code, maintainability, cognitive
-complexity, tests, per-package coverage, CRAP) followed by this project's
-documentation-freshness task. The Makefile and the `scripts/` directory are removed.
+`python-codeforge`, pinned in the `dev` dependency group to the published release
+wheel for `1.1.0` and exposed through a two-line `tasks.py`. The pin is a
+`[tool.uv.sources]` URL rather than a Git tag because a wheel is an immutable
+artefact `uv.lock` can hash, which keeps `uv export` hashed and lets a strict
+dependency audit cover the gate's own tree. `uv run invoke verify` is the gate:
+Codeforge's `check` (hygiene, lint, strict typing, dead code, maintainability,
+cognitive complexity, tests, per-package coverage, CRAP) followed by this
+project's documentation-freshness task. The Makefile and the `scripts/` directory are removed.
 
 A loose shell script is unimported, so it is untyped, untested, and uncallable from
 another task; the two scripts it replaced duplicated logic that the shared tasks

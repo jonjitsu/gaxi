@@ -57,6 +57,22 @@ jobs:
       - name: Sync the development environment
         run: uv sync --all-groups --frozen
 
+      # Built from the tagged tree, so the asset is the reviewed commit. The
+      # filename carries the version setuptools read from `pyproject.toml`, so a
+      # tag that does not match the declared version fails here rather than
+      # publishing a wheel named after the wrong release.
+      - name: Build the release wheel
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          uv build --wheel
+          wheel="dist/gaxi-${TAG}-py3-none-any.whl"
+          if [ ! -f "$wheel" ]; then
+            echo "missing wheel: $wheel" >&2
+            exit 1
+          fi
+
       - name: Push the release to GitHub
         env:
           TOKEN: ${{ secrets.MIRROR_GITHUB_TOKEN }}
@@ -71,6 +87,7 @@ jobs:
           git push mirror "$TAG^{commit}:refs/heads/master"
 
       - name: Publish the GitHub release
+        id: github_release
         env:
           TOKEN: ${{ secrets.MIRROR_GITHUB_TOKEN }}
           TAG: ${{ steps.release.outputs.tag }}
@@ -81,11 +98,37 @@ jobs:
             echo "no changelog section for $TAG" >&2
             exit 1
           fi
-          jq -n --arg t "$TAG" --arg b "$notes" \
+          upload_url="$(jq -n --arg t "$TAG" --arg b "$notes" \
             '{tag_name: $t, name: ("gaxi " + $t), body: $b}' | \
           curl -sf -X POST \
             -H "Authorization: Bearer $TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            -d @- "https://api.github.com/repos/jonjitsu/gaxi/releases" > /dev/null
+            -d @- "https://api.github.com/repos/jonjitsu/gaxi/releases" \
+            | jq -r '.upload_url' | sed 's/{?name,label}//')"
+          if [ -z "$upload_url" ] || [ "$upload_url" = "null" ]; then
+            echo "release $TAG published without an upload URL" >&2
+            exit 1
+          fi
+          echo "upload_url=$upload_url" >> "$GITHUB_OUTPUT"
           echo "published gaxi $TAG on GitHub"
+
+      # The wheel is what a consumer depends on: a release asset is immutable and
+      # hashable, so `uv lock` can record its SHA-256 and `pip-audit --strict` can
+      # audit an export that includes it. A Git dependency has no such artefact.
+      - name: Publish the release wheel
+        env:
+          TOKEN: ${{ secrets.MIRROR_GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag }}
+          UPLOAD_URL: ${{ steps.github_release.outputs.upload_url }}
+        run: |
+          set -euo pipefail
+          wheel="dist/gaxi-${TAG}-py3-none-any.whl"
+          curl -sf -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary "@$wheel" \
+            "$UPLOAD_URL?name=$(basename "$wheel")" > /dev/null
+          echo "published $(basename "$wheel") to GitHub release $TAG"
