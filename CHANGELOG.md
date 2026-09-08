@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.4.1
+
 - The `python-codeforge` quality gate moves to `1.1.0` and is now installed from
   the published GitHub release wheel rather than a Git tag. A Git dependency has
   no distributable artefact to hash, so `uv export` could not emit hashes for it
