@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.13"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -640,7 +640,7 @@ wheels = [
 
 [[package]]
 name = "gaxi"
-version = "1.4.1"
+version = "1.4.2"
 source = { editable = "." }
 
 [package.dev-dependencies]

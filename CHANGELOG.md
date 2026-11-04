@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.4.2
+
 - `--output json` on a successful API response now prints the response body
   itself. The default projection and the 160-character truncation ran before
   encoding, so a machine reading a field the projection drops (for example
