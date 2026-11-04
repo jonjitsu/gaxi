@@ -167,7 +167,11 @@ def _plain_cell(cell: object) -> JsonValue:
 
 
 def to_object(document: Document) -> JsonObject:
-    """The logical document as plain Python data, shared by JSON and YAML."""
+    """The logical document as plain Python data, shared by JSON and YAML.
+
+    Successful API responses requested as JSON do not use this path. They emit
+    the response body directly so the default projection is not applied.
+    """
     out: JsonObject = {}
     for key, node in document.pairs:
         out[key] = _plain(node)
@@ -176,9 +180,14 @@ def to_object(document: Document) -> JsonObject:
     return out
 
 
+def dumps_json(value: JsonValue) -> str:
+    """Render one JSON value, indented, without ASCII escaping."""
+    return json.dumps(value, indent=2, ensure_ascii=False)
+
+
 def to_json(document: Document) -> str:
     """Render the document as indented JSON."""
-    return json.dumps(to_object(document), indent=2, ensure_ascii=False)
+    return dumps_json(to_object(document))
 
 
 def _yaml_scalar(value: object) -> str:

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- `--output json` on a successful API response now prints the response body
+  itself. The default projection and the 160-character truncation ran before
+  encoding, so a machine reading a field the projection drops (for example
+  `status` or `conclusion` on an actions run) always saw an empty value. JSON
+  is the machine format, so that path skips the default projection and
+  truncation. Explicit `--fields` still selects, and each selected path is the
+  JSON value rather than a projected logical-document column. TOON is
+  unchanged. YAML still encodes the projected logical result, including
+  `count`, `omitted[]`, and `help[]`. Errors, status results, and non-JSON
+  bodies stay structured documents in every format.
+
 ## 1.4.1
 
 - The `python-codeforge` quality gate moves to `1.1.0` and is now installed from

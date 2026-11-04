@@ -20,7 +20,7 @@ from gaxi.commands import setup as setup_command
 from gaxi.commands import skill as skill_command
 from gaxi.credentials import redact
 from gaxi.document import Document
-from gaxi.encode import encode
+from gaxi.encode import dumps_json, encode
 from gaxi.errors import EXIT_FAILURE, GaxiError, UsageError
 from gaxi.invocation import Outcome
 from gaxi.invoke import run_request
@@ -249,6 +249,9 @@ def _write_outcome(
     if outcome.raw is not None:
         _write_raw(stream, outcome.raw)
         return outcome.exit_code
+    if outcome.emit_json_body and options.output.format == "json":
+        _write_text(stream, dumps_json(outcome.json_body), secrets)
+        return outcome.exit_code
     _write_document(stream, outcome.document or Document(), options, secrets)
     return outcome.exit_code
 
@@ -309,7 +312,11 @@ def _write_document(
     options: Options,
     secrets: Sequence[str],
 ) -> None:
-    stream.write(redact(encode(document, options.output.format), secrets) + "\n")
+    _write_text(stream, encode(document, options.output.format), secrets)
+
+
+def _write_text(stream: IO[str], text: str, secrets: Sequence[str]) -> None:
+    stream.write(redact(text, secrets) + "\n")
 
 
 def _write_raw(stream: IO[str], payload: bytes) -> None:

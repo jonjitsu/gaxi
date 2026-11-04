@@ -22,6 +22,18 @@ PULLS = [
     {"number": 37, "title": "Update docs", "state": "open", "merged": False,
      "updated_at": "2026-08-28T09:31:00Z", "body": "b"},
 ]
+# Fields the issue projection drops, including the ones an actions-run poller reads.
+RUN = {
+    "id": 9,
+    "number": 9,
+    "title": "CI",
+    "state": "open",
+    "updated_at": "2026-08-29T18:12:00Z",
+    "status": "completed",
+    "conclusion": "success " + "z" * 200,
+    "html_url": "https://gitea.example/run/9",
+    "actor": {"login": "alice"},
+}
 
 
 class CollectionTest(unittest.TestCase):
@@ -70,16 +82,21 @@ class CollectionTest(unittest.TestCase):
                             responses=[json_response(payload)])
         assert "repositories[1]{" in out
 
-    def test_explicit_formats_encode_the_same_result(self) -> None:
+    def test_json_is_the_body_and_yaml_keeps_the_logical_result(self) -> None:
+        headers = {"X-Total-Count": "2"}
         _, toon, _ = run_cli(["get", "/repos/acme/widgets/pulls"],
-                             responses=[json_response(PULLS, headers={"X-Total-Count": "2"})])
+                             responses=[json_response(PULLS, headers=headers)])
         _, text, _ = run_cli(["get", "/repos/acme/widgets/pulls", "--output", "json"],
-                             responses=[json_response(PULLS, headers={"X-Total-Count": "2"})])
-        payload = json.loads(text)
-        assert payload["count"] == 2
-        assert payload["total"] == 2
-        assert payload["pull_requests"][0]["title"] == "Fix race"
+                             responses=[json_response(PULLS, headers=headers)])
+        _, yaml_text, _ = run_cli(["get", "/repos/acme/widgets/pulls", "--output", "yaml"],
+                                  responses=[json_response(PULLS, headers=headers)])
+        assert json.loads(text) == PULLS
         assert "count: 2 of 2 total" in toon
+        assert "omitted[2]: updated_at, body" in toon
+        assert "count: 2" in yaml_text
+        assert 'title: "Fix race"' in yaml_text
+        assert "omitted:" in yaml_text
+        assert "body: b" not in yaml_text
 
 
 class ProjectionTest(unittest.TestCase):
@@ -191,6 +208,68 @@ class ProjectionTest(unittest.TestCase):
         _, out, _ = run_cli(["get", "/repos/acme/widgets/pulls", "--fields", "number,state"],
                             responses=[json_response(rows)])
         assert "  41,null" in out
+
+
+class JsonOutputTest(unittest.TestCase):
+    """`--output json` is the API body; the default format still projects."""
+
+    PATH = "/repos/acme/widgets/issues/42"
+
+    def test_json_equals_the_full_body(self) -> None:
+        code, out, _ = run_cli(
+            ["get", self.PATH, "--output", "json"],
+            responses=[json_response(RUN)],
+        )
+        assert code == 0
+        assert json.loads(out) == RUN
+
+    def test_default_output_still_projects(self) -> None:
+        code, out, _ = run_cli(["get", self.PATH], responses=[json_response(RUN)])
+        assert code == 0
+        assert "issue:" in out
+        assert "  number: 9" in out
+        assert "  title: CI" in out
+        assert "  status:" not in out
+        assert "omitted[5]: id, status, conclusion, html_url, actor" in out
+        assert "completed" not in out
+        assert "alice" not in out
+
+    def test_json_fields_returns_only_those_fields(self) -> None:
+        code, out, _ = run_cli(
+            ["get", self.PATH, "--output", "json", "--fields", "id,status"],
+            responses=[json_response(RUN)],
+        )
+        assert code == 0
+        assert json.loads(out) == {"id": 9, "status": "completed"}
+
+    def test_json_fields_limits_each_collection_item(self) -> None:
+        code, out, _ = run_cli(
+            ["get", "/repos/acme/widgets/pulls", "--output", "json",
+             "--fields", "number,body"],
+            responses=[json_response(PULLS)],
+        )
+        assert code == 0
+        assert json.loads(out) == [{"number": 41, "body": "b"}, {"number": 37, "body": "b"}]
+
+    def test_json_batch_returns_the_full_items(self) -> None:
+        created = [dict(RUN, number=1), dict(RUN, number=2)]
+        code, out, _ = run_cli(
+            ["post", "/repos/acme/widgets/issues", "--output", "json",
+             "--input-json", '[{"title":"a"},{"title":"b"}]'],
+            responses=[json_response(item, status=201) for item in created],
+        )
+        assert code == 0
+        assert json.loads(out) == created
+
+    def test_yaml_still_projects(self) -> None:
+        _, out, _ = run_cli(
+            ["get", self.PATH, "--output", "yaml"],
+            responses=[json_response(RUN)],
+        )
+        assert "number: 9" in out
+        assert "omitted:" in out
+        assert "completed" not in out
+        assert "alice" not in out
 
 
 class TruncationTest(unittest.TestCase):

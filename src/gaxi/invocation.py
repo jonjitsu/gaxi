@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from gaxi.capability import Capability
     from gaxi.classify import Classification
     from gaxi.document import Document
+    from gaxi.jsonshape import JsonValue
     from gaxi.options import RequestOptions
     from gaxi.planner import Planner
     from gaxi.policy import Properties
@@ -22,17 +23,22 @@ if TYPE_CHECKING:
 
 
 class Outcome:
-    """What a command produced: a document, or exact bytes for `--raw`."""
+    """What a command produced: a document, a JSON body, or exact bytes for `--raw`."""
 
     def __init__(
         self,
         document: Document | None = None,
         raw: bytes | None = None,
         exit_code: int = 0,
+        *,
+        json_body: JsonValue = None,
+        emit_json_body: bool = False,
     ) -> None:
         self.document = document
         self.raw = raw
         self.exit_code = exit_code
+        self.json_body = json_body
+        self.emit_json_body = emit_json_body
 
 
 @dataclass(frozen=True)

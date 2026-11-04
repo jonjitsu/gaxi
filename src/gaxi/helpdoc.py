@@ -30,7 +30,8 @@ class CommandSpec(TypedDict):
 GLOBAL_OPTIONS: list[Option] = [
     ("--server <origin>", "origin", "repository context", "Select the instance explicitly."),
     ("--output <format>", "toon|json|yaml", "toon",
-     "Encode the same logical result in another format."),
+     ("json returns a successful API body without the default projection; "
+      "toon and yaml encode the logical result.")),
     ("--anonymous", "flag", "false", "Send no credential even when one is bound to the origin."),
     ("--refresh", "flag", "false", "Re-fetch the instance description instead of using the cache."),
     ("--timeout <seconds>", "integer", "30", "HTTP timeout for one request."),

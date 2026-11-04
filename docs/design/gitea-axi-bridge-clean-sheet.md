@@ -178,7 +178,7 @@ error:
   request: GET /repos/acme/widgets/issues/42
 ```
 
-Relevant failures and successful results append one to three executable `help[]` suggestions in the same root document. Field order is stable. Explicit JSON and YAML formats encode the same logical result rather than exposing a different response model.
+Relevant failures and successful results append one to three executable `help[]` suggestions in the same root document. Field order is stable. YAML encodes that same logical result. `--output json` on a successful JSON API response returns the response body itself: no default projection, no truncation, and no `help[]`. Explicit `--fields` still selects paths from that body. Failures, status results, and non-JSON bodies stay structured documents in every format.
 
 ## Decision 5: explicit non-JSON transport modes
 
@@ -246,7 +246,7 @@ help[1]:
 
 Collection metadata adds a one-based `row` column so each truncated cell is identifiable. Identifiers, field names, aggregates, control metadata, and executable help commands are never truncated. Text responses use the same limit in structured mode.
 
-`--full` disables truncation only for fields already present in the projection. It does not add fields, fetch additional pages, or change output format. TOON, JSON, and YAML share the same logical truncation behavior; successful `--raw` output remains exact.
+`--full` disables truncation only for fields already present in the projection. It does not add fields, fetch additional pages, or change output format. TOON and YAML share the same logical truncation behavior. `--output json` does not truncate a successful API body. Successful `--raw` output remains exact bytes.
 
 ## Decision 8: bounded, explicit pagination
 

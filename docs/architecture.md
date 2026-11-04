@@ -273,6 +273,9 @@ flowchart TD
 Runtime classification uses the actual response first and consults the
 advertised response schema only when metadata is absent. Projection preserves
 the instance's field names; policy selects fields but does not rename them.
+`--output json` on a successful JSON API response skips that projection and
+prints the response body. Explicit `--fields` still selects paths from the
+body. YAML keeps the projected logical document.
 
 ## Where to change behavior
 

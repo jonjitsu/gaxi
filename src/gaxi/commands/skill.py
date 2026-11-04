@@ -91,6 +91,9 @@ def run(session: Session) -> str:
         "`--fields` and `--full` to read a complete value."),
         ("- Projections list dropped response fields in `omitted[]`; use `--fields` to "
         "include them."),
+        ("- `--output json` returns the successful API response body with no default "
+        "projection and no truncation. `--fields` still limits that body to the named "
+        "paths. toon and yaml keep the projected logical result."),
         ("- Failures are structured on stdout with exit 1; validation failures exit 2 "
         "before any request is sent."),
         "- `help[]` lists the next executable commands.",

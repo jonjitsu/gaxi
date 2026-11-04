@@ -6,6 +6,7 @@ response looks like once it has come back.
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 
 from gaxi import projection, render
@@ -27,7 +28,7 @@ if TYPE_CHECKING:
     from gaxi.capability import Capability
     from gaxi.classify import Classification
     from gaxi.invocation import Invocation
-    from gaxi.jsonshape import JsonValue
+    from gaxi.jsonshape import JsonObject, JsonValue
     from gaxi.planner import Planner
     from gaxi.policy import Properties
     from gaxi.transport import Response
@@ -62,6 +63,11 @@ def render_classification(
         )
     if request.raw:
         return Outcome(raw=response.read_all())
+    if _json_output(inv) and classification.kind in {"collection", "object"}:
+        return Outcome(
+            emit_json_body=True,
+            json_body=_json_api_body(inv, classification, response),
+        )
     return Outcome(_document_for(inv, classification))
 
 
@@ -69,6 +75,8 @@ def render_batch_collection(inv: Invocation, classification: Classification) -> 
     """Shape a synthetic batch collection into the result the caller receives."""
     request = inv.request
     items = classification.payload or []
+    if _json_output(inv):
+        return Outcome(emit_json_body=True, json_body=_json_collection(inv, items))
     fields = _resolve_batch_fields(inv.cap, inv.props, items, request.fields)
     if request.fields is None:
         fields = _batch_result_fields(fields, items)
@@ -182,6 +190,58 @@ def _batch_result_fields(fields: list[str], items: Sequence[JsonValue]) -> list[
     remaining = MAX_DECLARED_FIELDS - len(leading) - len(missing)
     others = [name for name in fields if name not in error_fields][:remaining]
     return leading + missing + others
+
+
+def _json_output(inv: Invocation) -> bool:
+    """Whether this invocation asked for the machine JSON body."""
+    return inv.session.options.output.format == "json"
+
+
+def _json_api_body(
+    inv: Invocation,
+    classification: Classification,
+    response: Response,
+) -> JsonValue:
+    """The API body for ``--output json``.
+
+    The default projection and truncation are skipped. Explicit ``--fields``
+    still selects, and each selected path keeps its JSON value.
+    """
+    if inv.request.fields is None:
+        return _decoded_body(response)
+    if classification.kind == "collection":
+        return _json_collection(inv, classification.payload)
+    return _selected_detail(inv, classification.payload)
+
+
+def _json_collection(inv: Invocation, payload: JsonValue) -> JsonValue:
+    """A collection body, or each item limited to the explicit fields."""
+    items: list[JsonValue] = payload if isinstance(payload, list) else []
+    if inv.request.fields is None:
+        return items
+    fields = resolve_fields(inv.cap, inv.props, items, inv.request.fields)
+    return [_selected(item, fields) for item in items]
+
+
+def _selected_detail(inv: Invocation, value: JsonValue) -> JsonObject:
+    """One object limited to the explicit fields, in caller order."""
+    items = [value] if isinstance(value, dict) else []
+    fields = resolve_fields(inv.cap, inv.props, items, inv.request.fields)
+    return _selected(value, fields)
+
+
+def _selected(value: JsonValue, fields: Sequence[str]) -> JsonObject:
+    """The named paths, with a missing path recorded as null."""
+    chosen: JsonObject = {}
+    for field in fields:
+        found = projection.resolve_path(value, field)
+        chosen[field] = None if found is projection.MISSING else found
+    return chosen
+
+
+def _decoded_body(response: Response) -> JsonValue:
+    """The response body parsed the same way the classifier parsed it."""
+    return json.loads(response.read_all().decode(response.charset, "replace"))
 
 
 def _document_for(inv: Invocation, classification: Classification) -> Document:
