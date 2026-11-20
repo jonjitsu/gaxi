@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a root `README.md`. It records the Nix flake, clone, and GitHub
+  release-wheel install paths, plus the configuration and commands the CLI
+  already implements.
+
 ## 1.4.2
 
 - `--output json` on a successful API response now prints the response body
